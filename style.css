@@ -1,0 +1,20 @@
+header {
+    text-align: center;
+}
+
+main {
+    text-align: center;
+}
+
+.parallax-container {
+    height: 200px;
+}
+
+
+/*#project1 {
+    width: 100%;
+}*/
+
+span {
+    background-color: red;
+}
