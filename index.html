@@ -1,68 +1,194 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 
 <head>
     <title>Tim Muangkeo</title>
-    <script src="https://code.jquery.com/jquery-3.1.1.js" integrity="sha256-16cdPddA6VdVInumRGo6IbivbERE8p7CQR3HzTBuELA=" crossorigin="anonymous"></script>
-    <script src="main.js"></script>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.98.2/css/materialize.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.98.2/js/materialize.min.js"></script>
+    <link href='http://fonts.googleapis.com/css?family=Roboto:400,300,700' rel='stylesheet' type='text/css'>
+    <link href='http://fonts.googleapis.com/css?family=Josefin+Sans:600' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" href="plugins/font-awesome-4.7.0/css/font-awesome.css">
+    <!-- Latest compiled and minified CSS & JS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+    <!-- animate.css -->
+    <link rel="stylesheet" href="plugins/animate/animate.css" />
+    <link rel="stylesheet" href="plugins/animate/set.css" />
+    <link rel="shortcut icon" href="images/profile.jpg" type="image/x-icon">
+    
+    <link rel="stylesheet" href="plugins/style.css">
 </head>
 
 <body>
-    <header class="row">
-        <div class="navbar-fixed">
-            <nav class="blue-grey lighten-1">
-                <div class="nav">
-                    <ul class="right hide-on-med-and-down">
-                        <li><a href="#" class=" btn-floating pulse">About Me</a>
-                        </li>
-                        <li><a href="#" class=" btn-floating pulse">Projects</a></li>
-                    </ul>
+    <div id="home">
+        <div class="banner">
+            <img src="images/back.jpg" alt="banner" class="img-responsive">
+            <div class="caption">
+                <div class="caption-wrapper">
+                    <div class="caption-info">
+                        <img src="images/profile.jpg" class="img-circle profile">
+                        <h1 class="animated bounceInUp">Tim Muangkeo</h1>
+                        <h2><span class="type"></span></h2>
+                        <div class="col-md-6">
+                            <div class="animated bounceInDown"><a href="#about" class="btn btn-default explore">about me</a></div>
+                            <br>
+                            <div class="animated bounceInDown"><a href="#works" class="btn btn-default explore">view My Works</a></div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="animated bounceInDown"><a href="https://resume.creddle.io/resume/2crhy1wvi71" class="btn btn-default explore">resume</a>
+                            </div>
+                            <br>
+                            <div class="animated bounceInDown"><a href="#contact" class="btn btn-default explore">contact me</a></div>
+                        </div>
+                    </div>
                 </div>
-            </nav>
-        </div>
-        <div class="col m12">
-            <h1>Tim Muangkeo</h1>
-            <h2 class="flow-text">Full Stack Developer</h2>
-        </div>
-    </header>
-    <div class="parallax-container">
-        <div class="parallax"><img src="js/seattle.jpg"></div>
-    </div>
-    <div class="section white">
-        <div class="row container">
-            <h2 class="header">About Me</h2>
-            <p class="flow-text">this will be my about me section along with my resume
-                <br>
-                <br>Lorem ipsum dolor sit amet, consectetur adipisicing elit. Accusamus quae repellat qui quia, modi mollitia doloremque repudiandae, quos ipsum consequatur, eius delectus optio natus. Enim maxime similique temporibus libero quidem. Lorem ipsum dolor sit amet, consectetur adipisicing elit. Maiores tenetur consequuntur molestiae ex eligendi, odio neque nisi possimus similique assumenda itaque numquam doloremque deserunt quos porro. Quis blanditiis modi perspiciatis!</p>
-        </div>
-    </div>
-    <article class="row" id="scrollfire">
-        <h1 class="flow-text center">projects/skills</h1>
-        <div class="col m12">
-            <div class="carousel carousel-slider">
-                <img class="carousel-item" id="project1" src="js/project.gif">
-                <img class="carousel-item" id="project1" src="js/game.jpg">
-                <img class="carousel-item" id="project1" src="js/test.gif">
             </div>
         </div>
-    </article>
-    <main class="container">
-        <div class="row">
-            <div class="col m6">
-                <form>
-                    <input type="text" placeholder="name">
-                </form>
+    </div>
+        <div id="about" class="footer text-center spacer">
+        <section class="contact-us section-space-padding">
+            <div class="container">
+                <div class="row">
+                    <div class="col-sm-12">
+                    <div class="effect-oscar  wowload fadeInUp">
+                        <div class="section-title">
+                            <h1>About Me</h1>
+                                <p class="flow-text">I moved here from Anchorage, Alaska to pursue my passion of becoming a developer. </p>
+                        </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+    <div id="works" class=" clearfix grid">
+        <figure class="effect-oscar  wowload fadeInUp">
+            <img src="images/portfolio/1.png" />
+            <figcaption>
+                <h2>Flappy Bird</h2>
+                <p>Using pure HTML, CSS, and Javascript. I recreated the infamous and highly addictive game, Flappy Bird with a twist.
+                    <br>
+                    <a href="https://ttmuangkeo.github.io/u1-project-game-1/">FLAPPY BIRD</a>
+                    <a href="https://github.com/ttmuangkeo/u1-project-game-1">GitHub</a>
+                    </p>
+            </figcaption>
+        </figure>
+        <figure class="effect-oscar  wowload fadeInUp">
+            <img src="images/portfolio/2.png" />
+            <figcaption>
+                <h2>EVENTUROUS</h2>
+                <p>Eventurous is a Full-stack App that allows users to see spontaneous events nearby via Google Maps. Eventurous is great for people who are looking for something to do at any given time of day.
+                    <br>
+                    <a href="https://eventurous.herokuapp.com/">EVENTUROUS</a>
+                    <a href="https://github.com/ttmuangkeo/project-2">GitHub</a></p>
+            </figcaption>
+        </figure>
+        <figure class="effect-oscar  wowload fadeInUp">
+            <img src="images/portfolio/3.jpg" />
+            <figcaption>
+                <h2>partnerncode</h2>
+                <p>A tinder for developers. Using the "mean" stack, I collaborated with two developers in building this app. Our goal is to help aspiring developers to meet up by viewing each other's portfolio.
+                    <br>
+                    <a href="https://partnersincode.herokuapp.com/">partnerncode</a>
+                    <a href="https://github.com/celgutierrez/DevCollab">GitHub</a></p>
+            </figcaption>
+        </figure>
+        <figure class="effect-oscar  wowload fadeInUp">
+            <img src="images/portfolio/4.jpg" />
+            <figcaption>
+                <h2>Project 4</h2>
+                <p>project 4 
+                    <br>
+                    <a href="#" data-gallery>Link to Project 4</a></p>
+            </figcaption>
+        </figure>
+        <figure class="effect-oscar  wowload fadeInUp">
+            <img src="images/portfolio/5.jpg" />
+            <figcaption>
+                <h2>project 5</h2>
+                <p>project 5
+                    <br>
+                    <a href="images/portfolio/5.jpg" title="1" data-gallery>project link</a></p>
+            </figcaption>
+        </figure>
+        <figure class="effect-oscar  wowload fadeInUp">
+            <img src="images/portfolio/6.jpg" />
+            <figcaption>
+                <h2>project 6</h2>
+                <p>project 6
+                    <br>
+                    <a href="images/portfolio/6.jpg" title="1" data-gallery>project link</a></p>
+            </figcaption>
+        </figure>
+    </div>
+    <div id="testimonials" class="container spacer">
+        <h2 class="text-center  wowload fadeInUp">my testinmonies</h2>
+        <div class="clearfix">
+            <div class="col-sm-6 col-sm-offset-3">
+                <div id="carousel-testimonials" class="carousel slide testimonails  wowload fadeInRight" data-ride="carousel">
+                    <div class="carousel-inner">
+                        <div class="item active animated bounceInRight row">
+                            <div class="animated slideInLeft col-xs-2"><img alt="portfolio" src="images/profile.jpg" width="100" class="img-circle img-responsive"></div>
+                            <div class="col-xs-10">
+                                <p>Tim is the best..ever. Don't sleep on him, he's gonn be someone someday. That day is probably today!</p>
+                                <span>Timothy M. - <b>GA</b></span>
+                            </div>
+                        </div>
+                        <div class="item  animated bounceInRight row">
+                            <div class="animated slideInLeft col-xs-2"><img alt="portfolio" src="images/profile.jpg" width="100" class="img-circle img-responsive"></div>
+                            <div class="col-xs-10">
+                                <p>Tim basically invented problem solving skills. If you are reading this, you should probably skip the interview and other HR nonsense and get him an office ASAP!</p>
+                                <span>Timmy Muangkeo - <b>Timsung</b></span>
+                            </div>
+                        </div>
+                        <div class="item  animated bounceInRight row">
+                            <div class="animated slideInLeft  col-xs-2"><img alt="portfolio" src="images/profile.jpg" width="100" class="img-circle img-responsive"></div>
+                            <div class="col-xs-10">
+                                <p>This dude Tim.. He gonna make you billions. I'd hire him in a heartbeat!</p>
+                                <span>Tim Muangkeo - <b>Seattle, WA</b></span>
+                            </div>
+                        </div>
+                    </div>
+                    <ol class="carousel-indicators">
+                        <li data-target="#carousel-testimonials" data-slide-to="0" class="active"></li>
+                        <li data-target="#carousel-testimonials" data-slide-to="1"></li>
+                        <li data-target="#carousel-testimonials" data-slide-to="2"></li>
+                    </ol>
+                </div>
             </div>
         </div>
-    </main>
-    <footer class="row center-align">
-        <div class="col m12">
-            <p>footer</p>
-        </div>
-    </footer>
+    </div>
+    <!-- Footer Starts -->
+    <div class="footer text-center spacer">
+        <section id="contact" class="contact-us section-space-padding">
+            <div class="container">
+                <div class="row">
+                    <div class="col-sm-12">
+                        <div class="section-title">
+                            <h2>Contact Me.</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="row">
+            <div class="margin-top-80">
+                <a href="https://github.com/ttmuangkeo" target="_blank" class="facebook"><i class="fa fa-github fa-4x" aria-hidden="true"></i>Github</a>
+                <a href="https://www.linkedin.com/in/tim-muangkeo-78803a105/" target="_blank" class="twitter"><i class="fa fa-linkedin fa-4x"></i>LinkedIn</a>
+                <a href="mailto:tim.muangkeo@gmail.com" target="_blank" class="google-plus"><i class="fa fa-envelope fa-4x"></i>Gmail</a>
+            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+    <a href="#home" class="gototop "><i class="fa fa-angle-up fa-4x"></i></a>
+    <script src="//code.jquery.com/jquery.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="plugins/wow/wow.min.js"></script>
+    <script src="plugins/bootstrap/js/bootstrap.js" type="text/javascript"></script>
+    <script src="plugins/type/js/typed.js"></script>
+    <script src="plugins/script.js"></script>
 </body>
 
 </html>
