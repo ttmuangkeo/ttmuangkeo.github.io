@@ -10,10 +10,11 @@ $(function() {
 
  });
      $('.type').typed({
-        strings: ['Full Stack Web Developer'],
-        typeSpeed: 100
+        strings: ['^2000 Problem Solver.', 'Designer Enthusiast', 'Full Stack Web Developer.'],
+        typeSpeed: 100,
+        loop: true,
+        shuffle: true
      });
-
 
  var wow = new WOW({
      boxClass: 'wowload', // animated element css class (default is wow)
