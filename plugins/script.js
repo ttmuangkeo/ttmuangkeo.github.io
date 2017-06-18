@@ -10,10 +10,9 @@ $(function() {
 
  });
      $('.type').typed({
-        strings: ['^2000 Problem Solver.', 'Designer Enthusiast', 'Full Stack Web Developer.'],
+        strings: ['^2000 Problem Solver.', 'Life-long learner.', 'Winning Spirit.', 'Full Stack Web Developer.'],
         typeSpeed: 100,
-        loop: true,
-        shuffle: true
+        
      });
 
  var wow = new WOW({
