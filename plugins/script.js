@@ -10,7 +10,7 @@ $(function() {
 
  });
      $('.type').typed({
-        strings: ['^2000 Problem Solver.', 'Life-long learner.', 'Winning Spirit.', 'Full Stack Web Developer.'],
+        strings: ['^2000 Problem Solver.', 'Life-long learner.', 'Winning Spirit.', 'Web Developer.'],
         typeSpeed: 100,
         
      });
