@@ -307,6 +307,12 @@ section { padding-block: var(--space-6); scroll-margin-top: 4rem; }
 
 /* ---- 04 · field log ---- */
 #log { border-top: 1.5px solid var(--ink); }
+/* "Where I've worked" strip: employer logos shown as single-color marks, never as endorsements */
+.worked-at-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-5); margin-bottom: var(--space-5); }
+.worked-at-label { margin: 0; font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.worked-at { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-5); margin: 0; padding: 0; list-style: none; }
+.worked-at img { display: block; height: 1.75rem; width: auto; filter: brightness(0); opacity: 0.8; }
+
 .log-list { border-top: 1.5px solid var(--ink); }
 .entry { border-bottom: 1.5px solid var(--ink); }
 .entry summary {

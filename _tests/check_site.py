@@ -421,7 +421,7 @@ def test_features():
 TIMELINE = [
     ("Software Engineer", "MoxiWorks", "2024 \u2013 Present"),
     ("Senior Application Support Engineer", "MoxiWorks", "Mar 2022 \u2013 2024"),
-    ("Software Support Engineer", "Goodleap", "2021 \u2013 Mar 2022"),
+    ("Software Support Engineer", "GoodLeap", "2021 \u2013 Mar 2022"),
     ("Application Support Engineer", "MoxiWorks", "Mar 2018 \u2013 2021"),
     ("Web Developer", "Penwizard", "2017 \u2013 2018"),
     ("Junior Web Developer (contract)", "Mercutio", "2017"),
@@ -552,6 +552,27 @@ def test_inits_guarded():
         if not re.search(r"try\s*\{[^{}]*\b" + n + r"\(", body):
             problems.append(f"{n} not inside try")
     check("inits_guarded", not problems, "; ".join(problems))
+
+
+def test_worked_at_logos():
+    html = load_index()
+    m = re.search(r'<ul class="worked-at"[^>]*>(.*?)</ul>', html, re.S)
+    problems = []
+    if not m:
+        problems.append("no ul.worked-at strip")
+    else:
+        strip = m.group(1)
+        for co, path in (("MoxiWorks", "assets/img/logos/moxiworks.svg"),
+                         ("GoodLeap", "assets/img/logos/goodleap.svg")):
+            if not re.search(r'<img[^>]*src="' + re.escape(path) + r'"[^>]*alt="' + co + r'"', strip):
+                problems.append(f"{co} logo img with alt missing")
+            if not (ROOT / path).exists():
+                problems.append(f"{path} missing")
+        if re.search(r"trusted by", html, re.I):
+            problems.append('"Trusted by" wording implies endorsement')
+    if "Goodleap" in html:  # the brand is spelled GoodLeap
+        problems.append("misspelled Goodleap in index.html")
+    check("worked_at_logos", not problems, "; ".join(problems))
 
 
 def main():
