@@ -33,6 +33,9 @@ class HTMLIndex(HTMLParser):
         self.scope_links = {}  # scope name -> [attr dicts of <a>]
         self.scope_elems = {}  # scope name -> [(tag, attr dict)] in document order
         self.scope_h3 = {}     # scope name -> [h3 text]
+        self.entries = []      # details.entry: {"open": bool, "summary": str} in order
+        self._entry = None
+        self._in_summary = False
         self._h3 = None
         self._stack = []       # (tag, scope or None)
 
@@ -40,6 +43,10 @@ class HTMLIndex(HTMLParser):
         return {s for _, s in self._stack if s}
 
     def handle_endtag(self, tag):
+        if tag == "summary":
+            self._in_summary = False
+        if tag == "details":
+            self._entry = None
         if tag == "h3" and self._h3 is not None:
             text = " ".join("".join(self._h3[1]).split())
             for s in self._scopes():
@@ -51,6 +58,8 @@ class HTMLIndex(HTMLParser):
                 break
 
     def handle_data(self, data):
+        if self._in_summary and self._entry is not None:
+            self._entry["summary"] += data
         if self._h3 is not None:
             self._h3[1].append(data)
         for s in self._scopes():
@@ -62,6 +71,11 @@ class HTMLIndex(HTMLParser):
             a["id"] if tag == "section" and "id" in a else None)
         if tag == "h3":
             self._h3 = (tag, [])
+        if tag == "details" and "entry" in a.get("class", "").split():
+            self._entry = {"open": "open" in a, "summary": ""}
+            self.entries.append(self._entry)
+        if tag == "summary" and self._entry is not None:
+            self._in_summary = True
         if tag not in ("meta", "link", "img", "br", "hr", "input", "source"):
             self._stack.append((tag, scope))
         for s in self._scopes():
@@ -396,6 +410,42 @@ def test_features():
     if len(lis) < 12:
         problems.append(f"{len(lis)} integrations li, want >= 12")
     check("features", not problems, "; ".join(problems))
+
+
+TIMELINE = [
+    ("Software Engineer", "MoxiWorks", "2024 \u2013 Present"),
+    ("Senior Application Support Engineer", "MoxiWorks", "Mar 2022 \u2013 2024"),
+    ("Software Support Engineer", "Goodleap", "2021 \u2013 Mar 2022"),
+    ("Application Support Engineer", "MoxiWorks", "Mar 2018 \u2013 2021"),
+    ("Web Developer", "Penwizard", "2017 \u2013 2018"),
+    ("Junior Web Developer (contract)", "Mercutio", "2017"),
+    ("Software Engineering Immersive", "General Assembly", None),
+]
+VERSIONS = ["v4.0", "v3.1", "v3.0", "v2.0", "v1.1", "v1.0", "v0.9"]
+
+
+def test_timeline_facts():
+    idx = parse_index()
+    entries = idx.entries
+    problems = []
+    if len(entries) != len(TIMELINE):
+        problems.append(f"{len(entries)} details.entry, want {len(TIMELINE)}")
+    for i, (e, (role, co, dates)) in enumerate(zip(entries, TIMELINE)):
+        s = " ".join(e["summary"].split())
+        want = [role, co] + ([dates] if dates else [])
+        for w in want:
+            if w not in s:
+                problems.append(f"entry {i + 1} summary {s!r} missing {w!r}")
+        if i < len(VERSIONS) and VERSIONS[i] not in s:
+            problems.append(f"entry {i + 1} missing version {VERSIONS[i]}")
+    if entries and not entries[0]["open"]:
+        problems.append("first entry not open")
+    if any(e["open"] for e in entries[1:]):
+        problems.append("only the first entry should be open")
+    links = idx.scope_links.get("log", [])
+    if not any(a.get("href") == "assets/Tim_Muangkeo_Resume.pdf" and "download" in a for a in links):
+        problems.append("no resume download link in #log")
+    check("timeline_facts", not problems, "; ".join(problems))
 
 
 def main():
