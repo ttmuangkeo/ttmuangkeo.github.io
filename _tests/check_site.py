@@ -575,6 +575,22 @@ def test_worked_at_logos():
     check("worked_at_logos", not problems, "; ".join(problems))
 
 
+def test_route_logos():
+    html = load_index()
+    expected = {"moxi-support": "moxiworks", "goodleap": "goodleap",
+                "moxi-senior": "moxiworks", "moxi-swe": "moxiworks"}
+    names = {"moxiworks": "MoxiWorks", "goodleap": "GoodLeap"}
+    problems = []
+    for stop, logo in expected.items():
+        m = re.search(r'data-stop="' + stop + r'">(.*?)</li>', html, re.S)
+        block = m.group(1) if m else ""
+        pat = (r'<p class="stop-org[^"]*">\s*<img[^>]*src="assets/img/logos/' + logo
+               + r'\.svg"[^>]*alt="' + names[logo] + r'"')
+        if not re.search(pat, block):
+            problems.append(f"{stop}: no {names[logo]} logo in stop-org")
+    check("route_logos", not problems, "; ".join(problems))
+
+
 def main():
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

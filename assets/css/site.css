@@ -228,6 +228,10 @@ section { padding-block: var(--space-6); scroll-margin-top: 4rem; }
   font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: 0.06em;
   text-transform: uppercase; color: var(--muted);
 }
+/* Employer logos (MoxiWorks, GoodLeap) as single-color marks; alt text carries the name */
+.logo-mark { display: block; width: auto; height: 1.75rem; filter: brightness(0); opacity: 0.8; }
+.stop-org--logo { margin-top: var(--space-1); line-height: 0; }
+.stop-org--logo .logo-mark { height: 1.05rem; }
 .stop .stop-caption { margin-top: var(--space-2); font-size: var(--fs-sm); line-height: 1.55; color: var(--muted); }
 .stop-photo { margin: var(--space-3) 0 0; border: 1.5px solid var(--ink); }
 .stop-photo img { display: block; width: 100%; }
@@ -311,7 +315,7 @@ section { padding-block: var(--space-6); scroll-margin-top: 4rem; }
 .worked-at-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-5); margin-bottom: var(--space-5); }
 .worked-at-label { margin: 0; font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .worked-at { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-5); margin: 0; padding: 0; list-style: none; }
-.worked-at img { display: block; height: 1.75rem; width: auto; filter: brightness(0); opacity: 0.8; }
+.worked-at .logo-mark { height: 1.75rem; }
 
 .log-list { border-top: 1.5px solid var(--ink); }
 .entry { border-bottom: 1.5px solid var(--ink); }
