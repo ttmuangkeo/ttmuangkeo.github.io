@@ -3,7 +3,7 @@
   --paper: #eee8da;
   --ink: #1f2a22;
   --rust: #d9622b;
-  --rust-text: #b14d1d; /* AA-safe rust for small text on paper */
+  --rust-text: #a8441a; /* 4.90:1 on paper, passes WCAG AA for small text */
   --topo: #9a8f74;
   --muted: #38443b;
 
