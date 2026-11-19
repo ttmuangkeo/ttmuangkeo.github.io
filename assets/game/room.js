@@ -45,35 +45,49 @@ function createPanels(scene) {
   const scrim = doc.createElement('div');
   scrim.className = 'scrim';
   scrim.hidden = true;
-  scrim.addEventListener('click', () => dialog.close());
   doc.body.append(scrim);
   let opener = null;
-  let busy = false;
+  let token = 0;       // bumps on every open/close so stale async work can tell it lost
+  let state = 'closed';
 
   const focusables = () => [...dialog.querySelectorAll('a[href], button, summary, [tabindex="0"], input, select, textarea')]
     .filter((el) => !el.closest('[hidden]') && el.getClientRects().length);
   const onKey = (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); dialog.close(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); closePanel(); return; }
     if (e.key !== 'Tab') return;
     const f = focusables();
     if (!f.length) { e.preventDefault(); return; }
     const first = f[0], last = f.at(-1);
+    const title = dialog.querySelector('#panel-title');
     const inside = dialog.contains(doc.activeElement);
-    if (e.shiftKey && (doc.activeElement === first || !inside)) { e.preventDefault(); last.focus(); }
+    const atStart = doc.activeElement === first || doc.activeElement === title;
+    if (e.shiftKey && (atStart || !inside)) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && (doc.activeElement === last || !inside)) { e.preventDefault(); first.focus(); }
   };
 
-  dialog.addEventListener('close', () => {
+  // Runs synchronously when a panel closes (the native close event is async, so a panel
+  // replaced by another must not let the old close event tear down the new one).
+  const teardown = ({ restoreFocus = true } = {}) => {
+    if (state === 'closed') return;
+    state = 'closed';
+    token++;
     doc.removeEventListener('keydown', onKey);
     game.inert = false;
     scrim.hidden = true;
     doc.documentElement.classList.remove('panel-open');
     dialog.replaceChildren();
-    if (opener && opener.isConnected) opener.focus();
-    scene.onPanelClosed?.();
-  });
+    scene.onPanelChange?.();
+    if (restoreFocus && opener && opener.isConnected) opener.focus();
+    if (restoreFocus) scene.onPanelClosed?.();
+  };
+  dialog.addEventListener('close', () => { if (!dialog.open) teardown(); });
+  const closePanel = () => { teardown(); if (dialog.open) dialog.close(); };
+  scrim.onclick = closePanel;
 
   const show = () => {
+    state = 'open';
+    token++;
+    scene.onPanelChange?.();
     game.inert = true;
     scrim.hidden = false;
     doc.documentElement.classList.add('panel-open');
@@ -82,35 +96,42 @@ function createPanels(scene) {
   };
 
   return {
-    isOpen: () => dialog.open,
-    async open(id, from) {
-      if (busy || dialog.open) return;
-      busy = true;
+    isOpen: () => state === 'open',
+    // replace: close whatever is open first (used by the HUD so contact always works).
+    async open(id, from, { replace = false } = {}) {
+      if (state === 'open') {
+        if (!replace) return;
+        teardown({ restoreFocus: false });
+        if (dialog.open) dialog.close();
+      }
       opener = from || doc.activeElement;
       const p = PANELS[id];
       const head = doc.createElement('header');
       head.className = 'panel-head';
       head.innerHTML = `<h2 id="panel-title" tabindex="-1"></h2><button type="button" class="panel-close" aria-label="Close">×</button>`;
       head.querySelector('h2').textContent = p.title;
-      head.querySelector('.panel-close').addEventListener('click', () => dialog.close());
+      head.querySelector('.panel-close').addEventListener('click', closePanel);
       const body = doc.createElement('div');
       body.className = 'panel-body';
       body.innerHTML = '<p class="panel-loading">Loading…</p>';
       dialog.replaceChildren(head, body);
       dialog.dataset.object = id;
       show();
+      const mine = token;
       head.querySelector('h2').focus();
       try {
         const story = await loadStory();
+        if (mine !== token) return; // closed or replaced while loading
         body.replaceChildren(panelContent(story, id));
       } catch {
-        body.innerHTML = `<p>Couldn't load this part. <a href="/story/${p.story}">Read it in story mode →</a></p>`;
-      } finally {
-        busy = false;
+        if (mine !== token) return;
+        body.innerHTML = id === 'mailbox'
+          ? `<p>Email me at <a href="mailto:tim.muangkeo@gmail.com">tim.muangkeo@gmail.com</a>, or find me on <a href="https://www.linkedin.com/in/ttmuangkeo" rel="noopener">LinkedIn</a>.</p><p><a href="assets/Tim_Muangkeo_Resume.pdf" download>Download my resume</a></p>`
+          : `<p>Couldn't load this part. <a href="/story/${p.story}">Read it in story mode →</a></p>`;
       }
       scene.onPanelOpened?.(id);
     },
-    close: () => dialog.open && dialog.close(),
+    close: closePanel,
   };
 }
 
@@ -313,6 +334,8 @@ async function useObject(tim, scene, id) {
   const o = OBJECTS.find((obj) => obj.id === id);
   const arrived = await tim.walkTo(o.useSpot);
   if (!arrived) return false;
+  const walk = tim.walkId;               // any newer walk or panel change bumps this
+  const stillMine = () => walk === tim.walkId;
   const btn = scene.buttons.find((b) => b.dataset.object === id);
   const sprite = SPRITES[o.sprite];
   const objCanvas = btn.querySelector('canvas');
@@ -323,7 +346,7 @@ async function useObject(tim, scene, id) {
   };
   if (reducedMotion()) {
     tim.show(o.face === 'left' ? 'tim_walk_left' : 'tim_use');
-    return true;
+    return stillMine();
   }
   if (o.anim === 'photo') {
     const flash = doc.createElement('div');
@@ -338,10 +361,11 @@ async function useObject(tim, scene, id) {
     tim.show(o.face === 'left' ? 'tim_walk_left' : 'tim_use', i);
     setObjFrame(i % 2);
     await sleep(USE_MS / steps);
+    if (!stillMine()) { setObjFrame(0); return false; }
   }
   setObjFrame(0);
   tim.show(o.face === 'left' ? 'tim_walk_left' : 'tim_use', 0);
-  return true;
+  return stillMine();
 }
 
 // Absolutely positions an element in native room pixels; CSS multiplies by --s.
@@ -412,6 +436,7 @@ function buildRoom(room) {
 function layout(room) {
   const hud = doc.querySelector('.hud');
   const hudH = hud ? hud.getBoundingClientRect().height : 0;
+  doc.documentElement.style.setProperty('--hud-h', `${Math.ceil(hudH)}px`);
   const phone = matchMedia(PHONE_QUERY).matches;
   const vw = doc.documentElement.clientWidth;
   const s = fitScale(vw, innerHeight - 32, hudH, phone);
@@ -443,23 +468,25 @@ export function init() {
       const resume = doc.createElement('a');
       resume.className = 'bubble-btn'; resume.href = 'assets/Tim_Muangkeo_Resume.pdf'; resume.setAttribute('download', '');
       resume.textContent = 'Download resume';
-      const bubble = showBubble(room, scene, 'You found everything! Want to talk?', { x: 80, y: 30, actions: [contact, resume] });
+      const bubble = showBubble(room, scene, 'You found everything! Want to talk?', { x: 80, y: 4, actions: [contact, resume] });
+      bubble.classList.add('bubble--top');
       contact.focus();
-      bubble.classList.add('bubble--big');
     };
     // Click an object: Tim walks over, uses it, then its panel opens.
     scene.activate = async (id, from) => {
       if (scene.panels.isOpen()) return;
       const arrived = await scene.use(id);
-      if (arrived) await scene.panels.open(id, from);
+      if (arrived && !scene.panels.isOpen()) await scene.panels.open(id, from);
     };
+    // Opening or closing any panel cancels a walk in progress, so no stale panel pops up later.
+    scene.onPanelChange = () => { tim.walkId = nextWalkId(tim.walkId); };
     for (const b of scene.buttons) {
       b.addEventListener('click', (e) => { e.stopPropagation(); scene.activate(b.dataset.object, b); });
     }
     // HUD "Get in touch" opens the mailbox panel right away (the mailto link stays as the no-JS fallback).
     doc.querySelector('[data-hud="contact"]')?.addEventListener('click', (e) => {
       e.preventDefault();
-      scene.panels.open('mailbox', e.currentTarget);
+      scene.panels.open('mailbox', e.currentTarget, { replace: true });
     });
     // Warm the story page in the background so the first panel opens instantly.
     (window.requestIdleCallback || ((f) => setTimeout(f, 1200)))(() => loadStory().catch(() => {}));

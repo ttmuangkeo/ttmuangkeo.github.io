@@ -771,6 +771,15 @@ def test_game_life():
     check("game_life", not problems, "; ".join(problems))
 
 
+def test_canonical_tags():
+    problems = []
+    for name, html, url in (("home", load_index(), "https://ttmuangkeo.github.io/"),
+                            ("story", load_story(), "https://ttmuangkeo.github.io/story/")):
+        if f'<link rel="canonical" href="{url}">' not in html:
+            problems.append(f"{name} lacks canonical {url}")
+    check("canonical_tags", not problems, "; ".join(problems))
+
+
 def main():
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

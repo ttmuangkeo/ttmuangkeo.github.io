@@ -226,7 +226,9 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
   .tray-grid { grid-template-columns: repeat(4, 1fr); }
   .tray-btn { min-height: 64px; }
   html.game-ready .hud { flex-wrap: wrap; padding: 0.5rem 0.75rem; }
-  html.game-ready .hud-role, html.game-ready .hud-found { display: none; }
+  html.game-ready .hud-found, html.game-ready .hud-sep { display: none; }
+  html.game-ready .hud-name { display: flex; flex-direction: column; line-height: 1.3; }
+  html.game-ready .hud-role { font-size: 0.68rem; }
   html.game-ready .hud-menu { display: inline-grid; place-items: center; }
   html.game-ready .hud-actions { margin-left: auto; }
   html.game-ready .hud-actions .hud-btn:not(.hud-btn--ink) { display: none; }
@@ -237,6 +239,7 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
 /* ---------- flourishes ---------- */
 #room > .flash { background: #fff; opacity: 0.85; pointer-events: none; }
 #room > .bubble--hello { max-width: min(16rem, 70vw); }
+#room > .bubble--top { transform: translate(-50%, 0); max-width: min(22rem, calc(100% - 1rem)); }
 @media (max-width: 640px) {
   #room > .bubble { font-size: 0.8rem; padding: 0.4rem 0.55rem; }
 }
