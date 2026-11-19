@@ -33,6 +33,8 @@ class HTMLIndex(HTMLParser):
         self.scope_links = {}  # scope name -> [attr dicts of <a>]
         self.scope_elems = {}  # scope name -> [(tag, attr dict)] in document order
         self.scope_h3 = {}     # scope name -> [h3 text]
+        self.scope_imgs = {}   # scope name -> [img attr dicts]
+        self.icons = []        # <link rel="icon"> hrefs
         self.entries = []      # details.entry: {"open": bool, "summary": str} in order
         self._entry = None
         self._in_summary = False
@@ -87,6 +89,10 @@ class HTMLIndex(HTMLParser):
             self.ids.add(a["id"])
         if tag == "img":
             self.imgs.append(a)
+            for s in self._scopes():
+                self.scope_imgs.setdefault(s, []).append(a)
+        if tag == "link" and "icon" in a.get("rel", "").split():
+            self.icons.append(a.get("href", ""))
         if tag in ("a", "link") and "href" in a:
             self.links.append(a["href"])
         if tag == "meta":
@@ -446,6 +452,71 @@ def test_timeline_facts():
     if not any(a.get("href") == "assets/Tim_Muangkeo_Resume.pdf" and "download" in a for a in links):
         problems.append("no resume download link in #log")
     check("timeline_facts", not problems, "; ".join(problems))
+
+
+def test_basecamp():
+    idx = parse_index()
+    text = idx.scope_text.get("basecamp", "")
+    links = [a.get("href") for a in idx.scope_links.get("basecamp", [])]
+    problems = []
+    if "https://www.sitrepp.io" not in links:
+        problems.append("no link to https://www.sitrepp.io")
+    for w in ("Supabase", "Mapbox", "Flutter", "Claude"):
+        if w not in text:
+            problems.append(f"missing {w}")
+    check("basecamp", not problems, "; ".join(problems))
+
+
+def test_offtrail():
+    idx = parse_index()
+    imgs = idx.scope_imgs.get("offtrail", [])
+    problems = []
+    if "Summit Peak Venture" not in idx.scope_text.get("offtrail", ""):
+        problems.append("missing Summit Peak Venture")
+    if not 6 <= len(imgs) <= 8:
+        problems.append(f"{len(imgs)} imgs, want 6-8")
+    if any(i.get("loading") != "lazy" for i in imgs):
+        problems.append("not all imgs loading=lazy")
+    check("offtrail", not problems, "; ".join(problems))
+
+
+def test_contact_links():
+    idx = parse_index()
+    hrefs = [a.get("href") for a in idx.scope_links.get("contact", [])]
+    want = ["mailto:tim.muangkeo@gmail.com?subject=Let%27s%20talk%20%E2%80%94%20from%20your%20site",
+            "https://www.linkedin.com/in/ttmuangkeo", "https://github.com/ttmuangkeo",
+            "assets/Tim_Muangkeo_Resume.pdf"]
+    missing = [w for w in want if w not in hrefs]
+    check("contact_links", not missing, f"missing {missing}")
+
+
+def test_meta_tags():
+    idx = parse_index()
+    m = idx.metas
+    problems = [f"missing {k}" for k in ("description", "og:title", "og:description") if not m.get(k)]
+    for k, v in (("og:image", "https://ttmuangkeo.github.io/assets/img/og.jpg"),
+                 ("og:url", "https://ttmuangkeo.github.io/"),
+                 ("twitter:card", "summary_large_image")):
+        if m.get(k) != v:
+            problems.append(f"{k}={m.get(k)!r}, want {v!r}")
+    if "assets/img/favicon.svg" not in idx.icons:
+        problems.append("no <link rel=icon> to assets/img/favicon.svg")
+    check("meta_tags", not problems, "; ".join(problems))
+
+
+def test_all_imgs_have_alt_and_size():
+    bad = [i.get("src") for i in parse_index().imgs
+           if not i.get("alt", "").strip() or not i.get("width") or not i.get("height")]
+    check("all_imgs_have_alt_and_size", not bad, f"bad imgs: {bad}")
+
+
+def test_404_exists():
+    p = ROOT / "404.html"
+    ok = p.exists()
+    f = HTMLIndex()
+    if ok:
+        f.feed(p.read_text(encoding="utf-8"))
+    check("404_exists", ok and "/" in f.links, "404.html missing or has no link to /")
 
 
 def main():
