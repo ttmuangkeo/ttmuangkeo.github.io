@@ -30,13 +30,13 @@
         <li><a href="#basecamp">Basecamp</a></li>
         <li><a href="#offtrail">Off-trail</a></li>
       </ul>
-      <a class="nav-resume" href="assets/Tim_Muangkeo_Resume.pdf" download>Resume ↓</a>
+      <a class="nav-resume" href="assets/Tim_Muangkeo_Resume.pdf" download>Resume <span aria-hidden="true">↓</span></a>
     </nav>
   </header>
 
   <main>
     <section id="trailhead" class="hero">
-      <svg class="topo" viewBox="0 0 600 300" preserveAspectRatio="none" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1" vector-effect="non-scaling-stroke">
+      <svg class="topo" viewBox="0 0 600 300" preserveAspectRatio="none" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1">
         <path d="M-10 60 C80 20 160 90 260 50 S440 10 610 70"/><path d="M-10 90 C90 50 170 120 270 80 S450 40 610 100"/>
         <path d="M-10 120 C100 80 180 150 280 110 S460 70 610 130"/><path d="M-10 150 C110 110 190 180 290 140 S470 100 610 160"/>
         <path d="M-10 180 C120 140 200 210 300 170 S480 130 610 190"/><path d="M-10 210 C130 170 210 240 310 200 S490 160 610 220"/>
@@ -44,7 +44,7 @@
       <div class="container hero-grid">
         <div class="hero-copy">
           <p class="section-label">01 · Trailhead</p>
-          <p class="tag">Trailhead · Anchorage, AK</p>
+          <p class="tag">Tim Muangkeo · Anchorage, AK</p>
           <h1>Just a kid from Alaska.</h1>
           <p class="hero-role">Software engineer in Seattle. I'm who production problems get escalated to, and I build the tools so they don't have to be.</p>
           <p class="hero-meta">Production &amp; customer-facing engineering · 7+ yrs SaaS</p>
@@ -55,7 +55,7 @@
           <p class="hero-coords">61.2181° N, 149.9003° W</p>
         </div>
         <figure class="hero-photo">
-          <img src="assets/img/tim-dome.jpg" width="1600" height="1066" fetchpriority="high" alt="Tim standing on a dome of rock in the mountains, looking out over the landscape">
+          <img src="assets/img/tim-dome.jpg" width="1600" height="1066" fetchpriority="high" alt="Tim in a rain jacket inside a geodesic dome tent, a rain-streaked round window behind him">
           <figcaption class="stamp">N 61.2181° → N 47.6062°<br>ANC → SEA</figcaption>
         </figure>
       </div>
@@ -97,7 +97,7 @@
             <path class="route-line" d="M16 0 V1000"/>
           </svg>
 
-          <ol class="stops">
+          <ol class="stops" role="list">
             <li class="stop" data-stop="uaa">
               <p class="stop-meta"><span class="stop-code">ANC</span> <span class="stop-years">2012–2017</span></p>
               <h3 class="stop-title">B.S. Civil Engineering</h3>
@@ -258,7 +258,7 @@
             <span class="entry-date">2021 – Mar 2022</span>
           </summary>
           <ul class="entry-body">
-            <li>Automated partner onboarding with AWS and DynamoDB; Node.js validation script cut turnaround from 24 hours to 1–2 hours (80% efficiency gain).</li>
+            <li>With a cross-functional team, automated partner onboarding on AWS and DynamoDB; Node.js validation script cut turnaround from 24 hours to 1–2 hours (80% efficiency gain).</li>
             <li>Monitored deployments and built operational reports in Kibana, CloudWatch, Datadog and Kafka: 95% SLA compliance.</li>
             <li>Led code review sessions and a team workshop on using Axios for API calls.</li>
           </ul>
@@ -336,7 +336,7 @@
           <p class="basecamp-cta"><a class="btn btn--ink" href="https://www.sitrepp.io" rel="noopener">Visit sitrepp.io <span aria-hidden="true">&rarr;</span></a></p>
         </div>
         <figure class="photo-frame basecamp-photo reveal">
-          <img src="assets/img/rig.jpg" width="1200" height="800" loading="lazy" alt="A camp rig with a rooftop tent set up at a campsite in the Pacific Northwest">
+          <img src="assets/img/rig.jpg" width="1200" height="800" loading="lazy" alt="A 4Runner with a rooftop tent at a viewpoint, a snow-capped peak glowing at sunset behind it">
         </figure>
       </div>
     </section>
@@ -344,7 +344,7 @@
       <div class="container">
         <div class="offtrail-intro reveal">
           <figure class="photo-frame offtrail-photo">
-            <img src="assets/img/tim-beach.jpg" width="800" height="1200" loading="lazy" alt="Tim standing on a sea-stack beach with his camera gear">
+            <img src="assets/img/tim-beach.jpg" width="800" height="1200" loading="lazy" alt="Tim in a backwards cap and pack straps on a beach, sea stacks behind him">
           </figure>
           <div class="offtrail-copy">
             <p class="section-label">06 · Off-trail</p>
@@ -357,8 +357,8 @@
           <figure><img src="assets/img/alaska-fjord.jpg" width="1200" height="800" loading="lazy" alt="An Alaska fjord with mountains meeting the water"></figure>
           <figure><img src="assets/img/alaska-door.jpg" width="1200" height="800" loading="lazy" alt="A glacier seen through a doorway in Alaska"></figure>
           <figure><img src="assets/img/rainier.jpg" width="1200" height="899" loading="lazy" alt="Aerial view of Mount Rainier"></figure>
-          <figure><img src="assets/img/trucks.jpg" width="1200" height="800" loading="lazy" alt="Trucks parked at camp"></figure>
-          <figure><img src="assets/img/milky-way.jpg" width="1200" height="675" loading="lazy" alt="The Milky Way over a night camp"></figure>
+          <figure><img src="assets/img/trucks.jpg" width="1200" height="800" loading="lazy" alt="Two trucks parked on an overlook above a lake and mountains"></figure>
+          <figure><img src="assets/img/milky-way.jpg" width="1200" height="675" loading="lazy" alt="The Milky Way over a forested ridge and a distant mountain"></figure>
         </div>
       </div>
     </section>
@@ -374,6 +374,7 @@
             <a class="btn btn--line" href="https://github.com/ttmuangkeo" rel="noopener">GitHub</a>
             <a class="btn btn--line" href="assets/Tim_Muangkeo_Resume.pdf" download>Download resume</a>
           </div>
+          <p class="contact-email"><a href="mailto:tim.muangkeo@gmail.com">tim.muangkeo@gmail.com</a></p>
         </div>
         <figure class="photo-frame contact-photo reveal">
           <img src="assets/img/tim-basalt.jpg" width="800" height="1200" loading="lazy" alt="Tim sitting on basalt columns in Iceland">

@@ -276,7 +276,6 @@ section { padding-block: var(--space-6); scroll-margin-top: 4rem; }
 
 /* ---- 03 · features ---- */
 #features { border-top: 1.5px solid var(--ink); }
-.features-head { max-width: 40rem; margin-bottom: var(--space-5); }
 .feature-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-3); }
 .feature {
   display: flex; flex-direction: column; gap: var(--space-2);
@@ -368,6 +367,8 @@ section { padding-block: var(--space-6); scroll-margin-top: 4rem; }
 .contact-copy p:not(.section-label) { margin: 0 0 var(--space-4); max-width: 34rem; color: var(--muted); }
 .contact-copy h2 { font-size: var(--fs-3xl); line-height: 0.98; letter-spacing: -0.03em; }
 .contact-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.contact-copy .contact-email { margin: var(--space-3) 0 0; font-family: var(--font-mono); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.contact-email a { color: var(--rust-text); }
 .contact-photo { max-width: 22rem; }
 
 @media (min-width: 860px) {
@@ -386,7 +387,7 @@ section { padding-block: var(--space-6); scroll-margin-top: 4rem; }
 
 /* ---- motion: only with JS and without reduced motion ---- */
 .js:not(.reduced) .reveal { opacity: 0; transform: translateY(1rem); transition: opacity 0.6s ease, transform 0.6s ease; }
-.js:not(.reduced) .reveal.is-visible { opacity: 1; transform: none; }
+.js:not(.reduced) .reveal.is-visible, .js:not(.reduced) .reveal:focus-within { opacity: 1; transform: none; }
 .js:not(.reduced) .route.is-live .stop:not(.is-active) > * { opacity: 0.18; transform: translateY(0.5rem); }
 .js:not(.reduced) .route.is-live .stop:not(.is-active)::before { background: var(--paper); border-color: var(--topo); }
 .js:not(.reduced) .route.is-live .route-dot:not(.is-active) { fill: var(--paper); stroke: var(--topo); }
@@ -402,3 +403,11 @@ section { padding-block: var(--space-6); scroll-margin-top: 4rem; }
 .lost { min-height: 100vh; display: flex; align-items: center; }
 .lost h1 { margin: 0 0 var(--space-3); font-weight: 700; font-size: var(--fs-3xl); line-height: 0.98; letter-spacing: -0.03em; text-transform: uppercase; }
 .lost-copy { max-width: 30rem; margin: 0 0 var(--space-4); color: var(--muted); }
+
+/* ---- print: show everything, fully drawn ---- */
+@media print {
+  .reveal, .stop > *, .route-detour { opacity: 1 !important; transform: none !important; }
+  .route-line { stroke-dashoffset: 0 !important; }
+  .stop::before { background: var(--rust) !important; }
+  .route-dot { fill: var(--rust) !important; }
+}

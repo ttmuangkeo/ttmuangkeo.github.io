@@ -80,7 +80,7 @@ function initRoute(root) {
   function measure() {
     svgs.forEach(function (svg) { svg.removeAttribute('style'); });
     var svg = visibleSvg();
-    if (!svg) { geo = null; return; }
+    if (!svg) { geo = null; root.classList.remove('is-live'); return; }
     var line = svg.querySelector('path.route-line');
     var horizontal = svg.classList.contains('route-svg--h');
     if (!horizontal) {
@@ -143,7 +143,7 @@ function initRoute(root) {
   measure();
   lastWidth = window.innerWidth;
   update();
-  root.classList.add('is-live'); // only now may CSS dim not-yet-reached stops
+  if (geo) root.classList.add('is-live'); // only now may CSS dim not-yet-reached stops
   onFrame(frame);
 
   // Fonts and late layout change stop heights: re-measure when the list resizes.
@@ -208,7 +208,12 @@ function initNav() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-  initRoute(document.getElementById('route'));
-  initReveal();
-  initNav();
+  var route = document.getElementById('route');
+  try { initReveal(); } catch (e) {
+    Array.prototype.forEach.call(document.querySelectorAll('.reveal'), function (el) { el.classList.add('is-visible'); });
+  }
+  try { initRoute(route); } catch (e) {
+    if (route) route.classList.remove('is-live');
+  }
+  try { initNav(); } catch (e) { /* nav marker is optional */ }
 });

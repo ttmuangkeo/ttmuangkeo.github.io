@@ -519,6 +519,41 @@ def test_404_exists():
     check("404_exists", ok and "/" in f.links, "404.html missing or has no link to /")
 
 
+def test_route_years():
+    html = load_index()
+    m = re.search(r'<section id="route".*?</section>', html, re.S)
+    sec = m.group(0) if m else ""
+    want = {"uaa": "2012\u20132017", "mercutio": "2017", "penwizard": "2017\u20132018",
+            "moxi-support": "Mar 2018\u20132021", "goodleap": "2021\u2013Mar 2022",
+            "moxi-senior": "Mar 2022\u20132024", "moxi-swe": "2024\u2013Present"}
+    problems = []
+    blocks = {}
+    for b in re.finditer(r'<li class="stop[^"]*" data-stop="([^"]+)">(.*?)</li>', sec, re.S):
+        blocks[b.group(1)] = b.group(2)
+    for k, years in want.items():
+        if years not in blocks.get(k, ""):
+            problems.append(f"{k} missing {years!r}")
+    if re.search(r"20\d\d", blocks.get("ga", "20")):
+        problems.append("ga should have no year")
+    check("route_years", not problems, "; ".join(problems))
+
+
+def test_inits_guarded():
+    js = (ROOT / "assets" / "js" / "site.js").read_text(encoding="utf-8")
+    m = re.search(r"DOMContentLoaded.*", js, re.S)
+    body = m.group(0) if m else ""
+    problems = []
+    pos = {n: body.find(n + "(") for n in ("initReveal", "initRoute", "initNav")}
+    if min(pos.values()) < 0:
+        problems.append("missing init call")
+    elif pos["initReveal"] > pos["initRoute"]:
+        problems.append("initReveal must run before initRoute")
+    for n in pos:
+        if not re.search(r"try\s*\{[^{}]*\b" + n + r"\(", body):
+            problems.append(f"{n} not inside try")
+    check("inits_guarded", not problems, "; ".join(problems))
+
+
 def main():
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):
