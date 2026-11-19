@@ -660,6 +660,18 @@ def test_hash_redirect():
     check("hash_redirect", bool(ok), f"inline redirect missing ids {missing} or /story/")
 
 
+def test_room_js_guarded():
+    p = ROOT / "assets" / "game" / "room.js"
+    js = p.read_text(encoding="utf-8") if p.exists() else ""
+    problems = []
+    t, c, ready = js.find("try"), js.find("catch"), js.find("game-ready")
+    if min(t, c, ready) < 0:
+        problems.append("room.js needs try/catch around init and a game-ready class")
+    elif not (t < ready < c):
+        problems.append("game-ready must be added inside the try, after rendering")
+    check("room_js_guarded", not problems, "; ".join(problems))
+
+
 def main():
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

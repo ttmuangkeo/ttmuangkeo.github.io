@@ -52,3 +52,42 @@ a { color: inherit; }
 .stage, #tray { display: none; }
 html.game-ready .fallback { display: none; }
 html.game-ready .stage { display: flex; justify-content: center; align-items: flex-start; padding: 1rem 0; }
+
+#room {
+  --s: 4;
+  position: relative;
+  width: calc(160px * var(--s)); height: calc(100px * var(--s));
+  background: var(--night-2); box-shadow: 0 0 0 4px var(--night-2), 0 12px 0 4px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+#room > * {
+  position: absolute;
+  left: calc(var(--x) * var(--s) * 1px); top: calc(var(--y) * var(--s) * 1px);
+  width: calc(var(--w) * var(--s) * 1px); height: calc(var(--h) * var(--s) * 1px);
+}
+.px { display: block; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+.layer { pointer-events: none; }
+
+/* Interactive objects are real buttons wearing a sprite. */
+.obj {
+  margin: 0; padding: 0; border: 0; background: none; cursor: pointer;
+  transition: transform 120ms steps(2);
+}
+.obj::after { /* invisible larger hit area (44px minimum on touch) */
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
+}
+.obj:hover, .obj:focus-visible { transform: translateY(calc(var(--s) * -1px)); filter: brightness(1.15); }
+.obj:focus-visible { outline: calc(var(--s) * 1px) solid var(--rust); outline-offset: calc(var(--s) * 1px); }
+
+.tip {
+  width: auto !important; height: auto !important;
+  transform: translate(-50%, -100%);
+  padding: 2px 6px; background: var(--paper); color: var(--ink); border: 2px solid var(--ink);
+  font: 600 11px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .obj { transition: none; }
+}

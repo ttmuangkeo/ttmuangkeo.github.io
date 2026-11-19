@@ -55,3 +55,40 @@ test('palette keys are single characters with "." transparent', () => {
   for (const k of Object.keys(PALETTE)) assert.equal(k.length, 1, k);
   assert.equal(PALETTE['.'], null);
 });
+
+// ---------- Task 3: objects and scaling ----------
+import { OBJECTS, ROOM } from '../assets/game/objects.js';
+import { fitScale } from '../assets/game/grid.js';
+
+test('OBJECTS has the 8 ids in order', () => {
+  assert.deepEqual(OBJECTS.map((o) => o.id), OBJECT_IDS);
+});
+
+test("every object's sprite exists and lies inside 160x100", () => {
+  for (const o of OBJECTS) {
+    const s = SPRITES[o.sprite];
+    assert.ok(s, `${o.id}: sprite ${o.sprite}`);
+    assert.ok(o.x >= 0 && o.y >= 0 && o.x + s.w <= 160 && o.y + s.h <= 100, `${o.id} out of bounds`);
+    assert.ok(o.label && o.ariaLabel, `${o.id} needs label and ariaLabel`);
+  }
+});
+
+test('useSpots are walkable floor cells', () => {
+  const blocked = new Set(ROOM.blocked.map(([c, r]) => `${c},${r}`));
+  for (const o of OBJECTS) {
+    const { col, row } = o.useSpot;
+    assert.ok(col >= 0 && col < ROOM.cols, `${o.id} col`);
+    assert.ok(row >= ROOM.floorTopRow && row < ROOM.rows, `${o.id} row ${row} not on floor`);
+    assert.ok(!blocked.has(`${col},${row}`), `${o.id} useSpot is blocked`);
+  }
+});
+
+test('fitScale on desktop is the largest whole number that fits', () => {
+  assert.equal(fitScale(1280, 800, 48, false), 7);
+  assert.equal(fitScale(300, 200, 48, false), 1);
+  assert.ok(Number.isInteger(fitScale(1920, 1080, 52, false)));
+});
+
+test('fitScale on phones fits the width', () => {
+  assert.equal(fitScale(375, 812, 48, true), 375 / 160);
+});
