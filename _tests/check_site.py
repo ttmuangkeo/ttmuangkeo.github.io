@@ -663,13 +663,64 @@ def test_hash_redirect():
 def test_room_js_guarded():
     p = ROOT / "assets" / "game" / "room.js"
     js = p.read_text(encoding="utf-8") if p.exists() else ""
+    i = js.find("export function init(")
+    js = js[i:] if i >= 0 else ""
     problems = []
-    t, c, ready = js.find("try"), js.find("catch"), js.find("game-ready")
+    t, c, ready = js.find("try {"), js.find("} catch"), js.find("game-ready")
     if min(t, c, ready) < 0:
         problems.append("room.js needs try/catch around init and a game-ready class")
     elif not (t < ready < c):
         problems.append("game-ready must be added inside the try, after rendering")
     check("room_js_guarded", not problems, "; ".join(problems))
+
+
+def test_panel_selectors_exist():
+    p = ROOT / "assets" / "game" / "panels.js"
+    js = p.read_text(encoding="utf-8") if p.exists() else ""
+    story = load_story()
+    sels = re.findall(r"'([#\\[][^']*)'", js)
+    problems = [] if sels else ["no selectors in panels.js"]
+    for sel in sels:
+        for tok in re.findall(r"#([a-z-]+)|\.([a-z-]+)|data-stop=\"([a-z-]+)\"", sel):
+            name = next(t for t in tok if t)
+            if not re.search(r'(id|class)="[^"]*\b' + re.escape(name) + r'\b|data-stop="' + re.escape(name) + '"', story):
+                problems.append(f"{sel}: {name} not in story page")
+    check("panel_selectors_exist", not problems, "; ".join(problems[:6]))
+
+
+def test_panels_no_new_facts():
+    p = ROOT / "assets" / "game" / "panels.js"
+    js = p.read_text(encoding="utf-8") if p.exists() else ""
+    story = load_story()
+    figures = set(re.findall(r"\d+%|\b(?:19|20)\d\d\b", js))
+    new = sorted(f for f in figures if f not in story)
+    bad = bool(PHONE.search(js)) or "Goodleap" in js or not js
+    check("panels_no_new_facts", not new and not bad, f"new figures {new}; phone/misspelling/missing={bad}")
+
+
+def test_root_counter():
+    html = load_index()
+    m = re.search(r'class="hud-found"[^>]*>(.*?)</p>', html, re.S)
+    text = re.sub(r"<[^>]+>", "", m.group(1)) if m else ""
+    check("root_counter", "Found" in text and "/8" in text, "HUD lacks a Found N/8 counter")
+
+
+def test_panel_keeps_hud_usable():
+    js = (ROOT / "assets" / "game" / "room.js").read_text(encoding="utf-8")
+    problems = []
+    if "showModal(" in js:
+        problems.append("showModal() makes the HUD inert; open panels non-modally")
+    for needle in ("inert", "Escape", "Tab"):
+        if needle not in js:
+            problems.append(f"room.js lacks {needle} handling for the non-modal panel")
+    check("panel_keeps_hud_usable", not problems, "; ".join(problems))
+
+
+def test_room_stacking_isolated():
+    css = (ROOT / "assets" / "game" / "room.css").read_text(encoding="utf-8")
+    m = re.search(r"#room\s*\{[^}]*\}", css)
+    ok = bool(m) and "isolation: isolate" in m.group(0)
+    check("room_stacking_isolated", ok, "#room needs isolation: isolate so sprites never cover panels")
 
 
 def main():

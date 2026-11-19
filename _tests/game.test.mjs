@@ -147,3 +147,55 @@ test('walkSpeed keeps any walk at or under 1.2 seconds', () => {
   assert.equal(walkSpeed(24), 48);            // short walks use the base speed
   assert.ok(200 / walkSpeed(200) <= 1.2 + 1e-9); // long walks speed up
 });
+
+// ---------- Task 5: panels and found state ----------
+import { PANELS } from '../assets/game/panels.js';
+import { createFoundState } from '../assets/game/state.js';
+
+test('PANELS has all 8 ids with a title and selectors', () => {
+  assert.deepEqual(Object.keys(PANELS), OBJECT_IDS);
+  for (const [id, p] of Object.entries(PANELS)) {
+    assert.ok(p.title && typeof p.title === 'string', `${id} title`);
+    assert.ok(Array.isArray(p.pick) && p.pick.length > 0, `${id} pick`);
+    assert.ok(p.story && p.story.startsWith('#'), `${id} story anchor`);
+  }
+});
+
+function memoryStorage() {
+  const m = new Map();
+  return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)) };
+}
+
+test('found-state is idempotent', () => {
+  const s = createFoundState(memoryStorage());
+  assert.equal(s.markFound('map'), true);
+  assert.equal(s.markFound('map'), false);
+  assert.equal(s.count(), 1);
+  assert.equal(s.isFound('map'), true);
+  assert.equal(s.isFound('laptop'), false);
+});
+
+test('found-state persists through storage', () => {
+  const store = memoryStorage();
+  createFoundState(store).markFound('camera');
+  assert.equal(createFoundState(store).isFound('camera'), true);
+});
+
+test('found-state survives throwing storage', () => {
+  const broken = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } };
+  const s = createFoundState(broken);
+  assert.equal(s.markFound('keys'), true);
+  assert.equal(s.count(), 1);
+  const none = createFoundState(undefined);
+  assert.equal(none.markFound('keys'), true);
+});
+
+test('allFound only after all 8, and ignores unknown ids', () => {
+  const s = createFoundState(memoryStorage());
+  s.markFound('not-a-thing');
+  assert.equal(s.count(), 0);
+  OBJECT_IDS.slice(0, 7).forEach((id) => s.markFound(id));
+  assert.equal(s.allFound(), false);
+  s.markFound('mailbox');
+  assert.equal(s.allFound(), true);
+});

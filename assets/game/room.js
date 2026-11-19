@@ -3,6 +3,156 @@
 import { SPRITES, paintSprite } from './sprites.js';
 import { OBJECTS, DECOR, ROOM } from './objects.js';
 import { fitScale, buildGrid, findPath, nextWalkId, walkSpeed, NATIVE_W, NATIVE_H } from './grid.js';
+import { PANELS } from './panels.js';
+import { createFoundState } from './state.js';
+
+// ---------- panels: content comes from the story page, never duplicated here ----------
+let storyPromise = null;
+function loadStory() {
+  storyPromise ??= fetch('/story/')
+    .then((r) => { if (!r.ok) throw new Error(`story ${r.status}`); return r.text(); })
+    .then((html) => new DOMParser().parseFromString(html, 'text/html'))
+    .catch((err) => { storyPromise = null; throw err; });
+  return storyPromise;
+}
+
+// Clones the picked story nodes, fixing ../assets paths and dropping scroll-reveal hooks.
+function panelContent(story, id) {
+  const frag = doc.createDocumentFragment();
+  for (const sel of PANELS[id].pick) {
+    const node = story.querySelector(sel);
+    if (!node) continue;
+    const clone = doc.importNode(node, true);
+    for (const el of [clone, ...clone.querySelectorAll('*')]) {
+      el.classList?.remove('reveal');
+      el.removeAttribute?.('id');
+      for (const attr of ['src', 'href']) {
+        const v = el.getAttribute?.(attr);
+        if (v && v.startsWith('../')) el.setAttribute(attr, v.slice(3));
+      }
+    }
+    clone.querySelectorAll('.section-label').forEach((n) => n.remove());
+    frag.append(clone);
+  }
+  return frag;
+}
+
+// Panels open non-modally so the HUD (resume, contact, story mode) stays usable.
+// The room behind is made inert, a scrim dims it, Esc closes, and Tab stays inside the panel.
+function createPanels(scene) {
+  const dialog = doc.getElementById('panel');
+  const game = doc.getElementById('game');
+  const scrim = doc.createElement('div');
+  scrim.className = 'scrim';
+  scrim.hidden = true;
+  scrim.addEventListener('click', () => dialog.close());
+  doc.body.append(scrim);
+  let opener = null;
+  let busy = false;
+
+  const focusables = () => [...dialog.querySelectorAll('a[href], button, summary, [tabindex="0"], input, select, textarea')]
+    .filter((el) => !el.closest('[hidden]') && el.getClientRects().length);
+  const onKey = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); dialog.close(); return; }
+    if (e.key !== 'Tab') return;
+    const f = focusables();
+    if (!f.length) { e.preventDefault(); return; }
+    const first = f[0], last = f.at(-1);
+    const inside = dialog.contains(doc.activeElement);
+    if (e.shiftKey && (doc.activeElement === first || !inside)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (doc.activeElement === last || !inside)) { e.preventDefault(); first.focus(); }
+  };
+
+  dialog.addEventListener('close', () => {
+    doc.removeEventListener('keydown', onKey);
+    game.inert = false;
+    scrim.hidden = true;
+    doc.documentElement.classList.remove('panel-open');
+    dialog.replaceChildren();
+    if (opener && opener.isConnected) opener.focus();
+    scene.onPanelClosed?.();
+  });
+
+  const show = () => {
+    game.inert = true;
+    scrim.hidden = false;
+    doc.documentElement.classList.add('panel-open');
+    dialog.show();
+    doc.addEventListener('keydown', onKey);
+  };
+
+  return {
+    isOpen: () => dialog.open,
+    async open(id, from) {
+      if (busy || dialog.open) return;
+      busy = true;
+      opener = from || doc.activeElement;
+      const p = PANELS[id];
+      const head = doc.createElement('header');
+      head.className = 'panel-head';
+      head.innerHTML = `<h2 id="panel-title" tabindex="-1"></h2><button type="button" class="panel-close" aria-label="Close">×</button>`;
+      head.querySelector('h2').textContent = p.title;
+      head.querySelector('.panel-close').addEventListener('click', () => dialog.close());
+      const body = doc.createElement('div');
+      body.className = 'panel-body';
+      body.innerHTML = '<p class="panel-loading">Loading…</p>';
+      dialog.replaceChildren(head, body);
+      dialog.dataset.object = id;
+      show();
+      head.querySelector('h2').focus();
+      try {
+        const story = await loadStory();
+        body.replaceChildren(panelContent(story, id));
+      } catch {
+        body.innerHTML = `<p>Couldn't load this part. <a href="/story/${p.story}">Read it in story mode →</a></p>`;
+      } finally {
+        busy = false;
+      }
+      scene.onPanelOpened?.(id);
+    },
+    close: () => dialog.open && dialog.close(),
+  };
+}
+
+// HUD counter, found sparkles, and the one-time "you found everything" moment.
+function createProgress(scene) {
+  let storage;
+  try { storage = localStorage; } catch { storage = undefined; }
+  const found = createFoundState(storage);
+  const counter = doc.querySelector('.hud-found');
+  const render = () => {
+    if (counter) { counter.hidden = false; counter.querySelector('.hud-count').textContent = String(found.count()); }
+    for (const b of scene.buttons) b.classList.toggle('is-found', found.isFound(b.dataset.object));
+    scene.onProgress?.(found);
+  };
+  render();
+  return {
+    found,
+    mark(id) {
+      const first = found.markFound(id);
+      render();
+      return first && found.allFound();
+    },
+  };
+}
+
+function showBubble(room, scene, html, { x, y, actions = [] } = {}) {
+  room.querySelector('.bubble')?.remove();
+  const b = doc.createElement('div');
+  b.className = 'bubble';
+  b.setAttribute('role', 'status');
+  b.innerHTML = `<p>${html}</p>`;
+  if (actions.length) {
+    const row = doc.createElement('p');
+    row.className = 'bubble-actions';
+    for (const a of actions) row.append(a);
+    b.append(row);
+  }
+  place(b, x, y, 0, 0);
+  b.style.zIndex = '600';
+  room.append(b);
+  return b;
+}
 
 const doc = document;
 const PHONE_QUERY = '(max-width: 640px), (orientation: portrait) and (max-width: 900px)';
@@ -198,9 +348,39 @@ export function init() {
     const tim = createTim(room);
     scene.tim = tim;
     scene.use = (id) => useObject(tim, scene, id);
+    scene.panels = createPanels(scene);
+    scene.progress = createProgress(scene);
+    let pendingCelebration = false;
+    scene.onPanelOpened = (id) => { pendingCelebration = scene.progress.mark(id) || pendingCelebration; };
+    scene.onPanelClosed = () => {
+      if (!pendingCelebration) return;
+      pendingCelebration = false;
+      const contact = doc.createElement('button');
+      contact.type = 'button'; contact.className = 'bubble-btn bubble-btn--ink'; contact.textContent = 'Get in touch';
+      contact.addEventListener('click', () => { room.querySelector('.bubble')?.remove(); scene.panels.open('mailbox', contact); });
+      const resume = doc.createElement('a');
+      resume.className = 'bubble-btn'; resume.href = 'assets/Tim_Muangkeo_Resume.pdf'; resume.setAttribute('download', '');
+      resume.textContent = 'Download resume';
+      const bubble = showBubble(room, scene, 'You found everything! Want to talk?', { x: 80, y: 30, actions: [contact, resume] });
+      contact.focus();
+      bubble.classList.add('bubble--big');
+    };
+    // Click an object: Tim walks over, uses it, then its panel opens.
+    scene.activate = async (id, from) => {
+      if (scene.panels.isOpen()) return;
+      const arrived = await scene.use(id);
+      if (arrived) await scene.panels.open(id, from);
+    };
     for (const b of scene.buttons) {
-      b.addEventListener('click', (e) => { e.stopPropagation(); scene.use(b.dataset.object); });
+      b.addEventListener('click', (e) => { e.stopPropagation(); scene.activate(b.dataset.object, b); });
     }
+    // HUD "Get in touch" opens the mailbox panel right away (the mailto link stays as the no-JS fallback).
+    doc.querySelector('[data-hud="contact"]')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      scene.panels.open('mailbox', e.currentTarget);
+    });
+    // Warm the story page in the background so the first panel opens instantly.
+    (window.requestIdleCallback || ((f) => setTimeout(f, 1200)))(() => loadStory().catch(() => {}));
     room.addEventListener('click', (e) => { // floor click: just walk there
       const r = room.getBoundingClientRect();
       const s = r.width / NATIVE_W;
