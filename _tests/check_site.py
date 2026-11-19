@@ -31,6 +31,7 @@ class HTMLIndex(HTMLParser):
         self.metas = {}
         self.scope_text = {}   # scope name -> text
         self.scope_links = {}  # scope name -> [attr dicts of <a>]
+        self.scope_elems = {}  # scope name -> [(tag, attr dict)] in document order
         self._stack = []       # (tag, scope or None)
 
     def _scopes(self):
@@ -52,6 +53,8 @@ class HTMLIndex(HTMLParser):
             a["id"] if tag == "section" and "id" in a else None)
         if tag not in ("meta", "link", "img", "br", "hr", "input", "source"):
             self._stack.append((tag, scope))
+        for s in self._scopes():
+            self.scope_elems.setdefault(s, []).append((tag, a))
         if tag == "a":
             for s in self._scopes():
                 self.scope_links.setdefault(s, []).append(a)
@@ -290,6 +293,68 @@ def test_hero_content():
     if not any(l.get("href") == resume for l in head_links):
         problems.append("header missing resume link")
     check("hero_content", not problems, "; ".join(problems))
+
+
+ROUTE_ORDER = ["uaa", "ga", "mercutio", "penwizard", "moxi-support",
+               "goodleap", "moxi-senior", "moxi-swe"]
+
+
+def test_route_stops():
+    idx = parse_index()
+    stops = [a for _, a in idx.scope_elems.get("route", [])
+             if "stop" in a.get("class", "").split()]
+    order = [a.get("data-stop") for a in stops]
+    classes = {a.get("data-stop"): a.get("class", "").split() for a in stops}
+    text = " ".join(idx.scope_text.get("route", "").split()).lower()
+    problems = []
+    if order != ROUTE_ORDER:
+        problems.append(f"stop order {order}, want {ROUTE_ORDER}")
+    if "stop--detour" not in classes.get("goodleap", []):
+        problems.append("goodleap lacks stop--detour")
+    if "stop--here" not in classes.get("moxi-swe", []):
+        problems.append("moxi-swe lacks stop--here")
+    for phrase in ("4-month contract", "you are here"):
+        if phrase not in text:
+            problems.append(f"route text missing '{phrase}'")
+    check("route_stops", not problems, "; ".join(problems))
+
+
+def css_rules(css):
+    """Yield (selector, declarations) for every innermost {...} block,
+    flattening @media/@supports nesting. Comments are stripped first."""
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    stack, start = [], 0
+    for i, ch in enumerate(css):
+        if ch == "{":
+            stack.append((css[start:i].strip(), i))
+            start = i + 1
+        elif ch == "}":
+            if stack:
+                sel, open_i = stack.pop()
+                body = css[open_i + 1:i]
+                if "{" not in body and not sel.startswith("@"):
+                    yield sel, body
+            start = i + 1
+        elif ch == ";" and not stack:
+            start = i + 1
+
+
+HIDES = re.compile(r"(?:^|;)\s*(?:opacity\s*:\s*0(?:\.0*)?\s*(?:!important\s*)?(?:;|$)"
+                   r"|visibility\s*:\s*hidden)", re.I)
+
+
+def test_no_hidden_without_js():
+    css = (ROOT / "assets" / "css" / "site.css").read_text(encoding="utf-8")
+    bad = []
+    for sel, body in css_rules(css):
+        if not HIDES.search(body.strip()):
+            continue
+        for part in sel.split(","):
+            part = part.strip()
+            if re.search(r"\.(?:reveal|stop)\b", part) and not part.startswith(".js"):
+                bad.append(part)
+    check("no_hidden_without_js", not bad,
+          f"hides .reveal/.stop without a .js guard: {bad}")
 
 
 def main():

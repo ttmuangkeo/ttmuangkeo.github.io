@@ -148,3 +148,146 @@ section { padding-block: var(--space-6); scroll-margin-top: 4rem; }
   .hero-copy { padding: var(--space-5) var(--space-5) var(--space-5) max(var(--gutter), calc((100vw - var(--container)) / 2 + var(--gutter))); justify-content: center; gap: var(--space-4); border-right: 1.5px solid var(--ink); }
   .hero-photo { border-top: 0; min-height: 0; }
 }
+
+/* Topo contour lines stay hairline however the SVG stretches. vector-effect
+   does not inherit from <g>, so it is set on the paths. */
+.topo path { vector-effect: non-scaling-stroke; }
+
+/* ---- 02 · the route ----
+   Default (no JS, or reduced motion): every stop is shown and the line is
+   fully drawn. Pre-draw states apply only under `.js:not(.reduced)` once
+   site.js marks the route live with `.is-live`. */
+.route { position: relative; overflow: hidden; border-top: 1.5px solid var(--ink); }
+.route .topo { opacity: 0.25; }
+.route > .container { position: relative; }
+.route-head { max-width: 40rem; margin-bottom: var(--space-5); }
+.route h2 {
+  margin: 0 0 var(--space-3);
+  font-weight: 700; font-size: var(--fs-2xl);
+  line-height: 1.02; letter-spacing: -0.02em; text-transform: uppercase;
+}
+.route-intro { margin: 0; color: var(--muted); }
+
+.route-map { position: relative; --dot-y: 0.7rem; --stop-gap: var(--space-5); }
+.route-svg { display: block; overflow: visible; }
+.route-svg path { fill: none; }
+.route-base { stroke: var(--topo); stroke-width: 1.5; stroke-dasharray: 2 6; vector-effect: non-scaling-stroke; }
+/* The drawn line keeps user-space stroke units on purpose: site.js sets its
+   dash to getTotalLength(), which only matches what is painted when the
+   stroke is not in screen space. Both SVGs scale it ~1:1 horizontally. */
+.route-line { stroke: var(--rust); stroke-width: 3; stroke-linecap: round; }
+.route-detour { stroke: var(--rust); stroke-width: 2; stroke-dasharray: 6 6; vector-effect: non-scaling-stroke; }
+.route-ticks path { stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.route-dot { fill: var(--rust); stroke: var(--ink); stroke-width: 2; vector-effect: non-scaling-stroke; }
+
+/* vertical trail (default, below 1024px) */
+.route-svg--h { display: none; }
+.route-svg--v {
+  position: absolute; left: 0; top: var(--dot-y);
+  width: 2rem; height: calc(100% - var(--dot-y));
+}
+.stops {
+  position: relative;
+  display: grid; gap: var(--stop-gap);
+  margin: 0; padding: 0 0 0 2.75rem; list-style: none;
+}
+.stop { position: relative; max-width: 34rem; }
+.stop > * { transition: opacity 0.5s ease, transform 0.5s ease; }
+.stop::before { /* the dot on the vertical line */
+  content: ""; position: absolute; z-index: 1;
+  left: calc(1rem - 2.75rem); top: var(--dot-y);
+  width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%;
+  background: var(--rust); border: 2px solid var(--ink);
+  transition: background-color 0.3s ease;
+}
+.stop--here::before { width: 20px; height: 20px; margin: -10px 0 0 -10px; }
+/* Goodleap: a dashed side loop off the main line, rejoining at the next stop's dot */
+.stop--detour { margin-left: 1rem; }
+.stop--detour::before { left: calc(1rem - 3.75rem + 1.5rem); }
+.stop--detour::after {
+  content: ""; position: absolute;
+  left: calc(1rem - 3.75rem); width: 1.5rem;
+  top: calc(-1 * var(--stop-gap) + 0.75rem);
+  bottom: calc(-1 * var(--stop-gap) - var(--dot-y));
+  border: 2px dashed var(--rust); border-left: 0; border-radius: 0 1.25rem 1.25rem 0;
+}
+
+.stop p { margin: 0; }
+.stop-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2);
+  font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+}
+.stop-code { font-weight: 600; color: var(--rust-text); }
+.stop-note { padding: 1px 6px; border: 1px solid var(--ink); color: var(--ink); }
+.stop-meta .tag { padding: 2px 6px; }
+.stop-title { margin: var(--space-1) 0 0; font-weight: 700; font-size: var(--fs-lg); line-height: 1.2; }
+.stop-org {
+  font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.stop .stop-caption { margin-top: var(--space-2); font-size: var(--fs-sm); line-height: 1.55; color: var(--muted); }
+.stop-photo { margin: var(--space-3) 0 0; border: 1.5px solid var(--ink); }
+.stop-photo img { display: block; width: 100%; }
+
+/* horizontal trail (≥1024px): stops alternate above and below the line on an
+   18-column grid, each card centred on its dot at (n / 9) of the width */
+@media (min-width: 1024px) {
+  @supports (grid-template-columns: subgrid) {
+    .route-map {
+      display: grid;
+      grid-template-columns: repeat(18, minmax(0, 1fr));
+      grid-template-rows: auto auto auto;
+    }
+    .route-svg--v { display: none; }
+    .route-svg--h { display: block; grid-column: 1 / -1; grid-row: 2; width: 100%; height: auto; aspect-ratio: 1000 / 140; }
+    .stops {
+      grid-column: 1 / -1; grid-row: 1 / -1;
+      grid-template-columns: subgrid; grid-template-rows: subgrid;
+      gap: 0; padding: 0;
+    }
+    .stop {
+      display: flex; flex-direction: column;
+      grid-row: 1; align-self: end;
+      padding: 0 0.6rem var(--space-3);
+      border-bottom: 1.5px solid var(--ink);
+    }
+    .stop:nth-child(even) {
+      grid-row: 3; align-self: start;
+      padding: var(--space-3) 0.6rem 0;
+      border-bottom: 0; border-top: 1.5px solid var(--ink);
+    }
+    .stop:nth-child(1) { grid-column: 1 / span 4; }
+    .stop:nth-child(2) { grid-column: 3 / span 4; }
+    .stop:nth-child(3) { grid-column: 5 / span 4; }
+    .stop:nth-child(4) { grid-column: 7 / span 4; }
+    .stop:nth-child(5) { grid-column: 9 / span 4; }
+    .stop:nth-child(6) { grid-column: 11 / span 4; }
+    .stop:nth-child(7) { grid-column: 13 / span 4; }
+    .stop:nth-child(8) { grid-column: 15 / span 4; }
+    .stop::before, .stop--detour::after { display: none; }
+    .stop--detour { margin-left: 0; }
+    .stop-title { font-size: var(--fs-base); }
+    .stop-photo { order: -1; margin: 0 0 var(--space-3); }
+  }
+}
+
+/* nav "you are here" marker (set by initNav) */
+.nav-links a[aria-current="true"] {
+  color: var(--rust-text);
+  text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 0.35em;
+}
+
+/* ---- motion: only with JS and without reduced motion ---- */
+.js:not(.reduced) .reveal { opacity: 0; transform: translateY(1rem); transition: opacity 0.6s ease, transform 0.6s ease; }
+.js:not(.reduced) .reveal.is-visible { opacity: 1; transform: none; }
+.js:not(.reduced) .route.is-live .stop:not(.is-active) > * { opacity: 0.18; transform: translateY(0.5rem); }
+.js:not(.reduced) .route.is-live .stop:not(.is-active)::before { background: var(--paper); border-color: var(--topo); }
+.js:not(.reduced) .route.is-live .route-dot:not(.is-active) { fill: var(--paper); stroke: var(--topo); }
+.js:not(.reduced) .route.is-live .route-dot { transition: fill 0.3s ease, stroke 0.3s ease; }
+.js:not(.reduced) .route.is-live .route-detour { transition: opacity 0.5s ease; }
+.js:not(.reduced) .route.is-live .route-detour:not(.is-active) { opacity: 0.15; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .stop > *, .stop::before, .route-dot, .route-detour { transition: none !important; }
+}
