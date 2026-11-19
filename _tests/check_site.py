@@ -29,9 +29,32 @@ class HTMLIndex(HTMLParser):
         self.imgs = []
         self.links = []
         self.metas = {}
+        self.scope_text = {}   # scope name -> text
+        self.scope_links = {}  # scope name -> [attr dicts of <a>]
+        self._stack = []       # (tag, scope or None)
+
+    def _scopes(self):
+        return {s for _, s in self._stack if s}
+
+    def handle_endtag(self, tag):
+        for i in range(len(self._stack) - 1, -1, -1):
+            if self._stack[i][0] == tag:
+                del self._stack[i:]
+                break
+
+    def handle_data(self, data):
+        for s in self._scopes():
+            self.scope_text[s] = self.scope_text.get(s, "") + data
 
     def handle_starttag(self, tag, attrs):
         a = {k: (v if v is not None else "") for k, v in attrs}
+        scope = "header" if tag == "header" else (
+            a["id"] if tag == "section" and "id" in a else None)
+        if tag not in ("meta", "link", "img", "br", "hr", "input", "source"):
+            self._stack.append((tag, scope))
+        if tag == "a":
+            for s in self._scopes():
+                self.scope_links.setdefault(s, []).append(a)
         if "id" in a:
             self.ids.add(a["id"])
         if tag == "img":
@@ -247,6 +270,26 @@ def test_resume_public():
     leaked = pat.search(text) or pat.search((data + blob).decode("latin-1"))
     check("resume_public", has_email and not leaked,
           f"email found={has_email}; phone found={bool(leaked)}")
+
+
+def test_hero_content():
+    idx = parse_index()
+    hero = idx.scope_text.get("trailhead", "").lower()
+    hero_links = idx.scope_links.get("trailhead", [])
+    head_links = idx.scope_links.get("header", [])
+    resume = "assets/Tim_Muangkeo_Resume.pdf"
+    problems = []
+    if "just a kid from alaska" not in hero:
+        problems.append("hero missing headline")
+    if "61.2181° n, 149.9003° w" not in hero:
+        problems.append("hero missing coordinates")
+    if not any(l.get("href") == "mailto:tim.muangkeo@gmail.com" for l in hero_links):
+        problems.append("hero missing mailto link")
+    if not any(l.get("href") == resume and "download" in l for l in hero_links):
+        problems.append("hero missing resume download link")
+    if not any(l.get("href") == resume for l in head_links):
+        problems.append("header missing resume link")
+    check("hero_content", not problems, "; ".join(problems))
 
 
 def main():
