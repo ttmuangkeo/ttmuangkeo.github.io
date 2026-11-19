@@ -739,6 +739,38 @@ def test_tray_markup():
     check("tray_markup", not problems, "; ".join(problems))
 
 
+GAME_FILES = ["room.js", "sprites.js", "objects.js", "grid.js", "state.js", "panels.js", "room.css"]
+
+
+def test_game_budget():
+    sizes = {f: (ROOT / "assets" / "game" / f).stat().st_size for f in GAME_FILES if (ROOT / "assets" / "game" / f).exists()}
+    total = sum(sizes.values()) + (ROOT / "index.html").stat().st_size
+    problems = []
+    if total > 300_000:
+        problems.append(f"game files total {total} bytes > 300 KB")
+    for f in ("room.js", "sprites.js"):
+        if sizes.get(f, 0) > 60_000:
+            problems.append(f"{f} is {sizes[f]} bytes > 60 KB")
+    check("game_budget", not problems and len(sizes) == len(GAME_FILES), "; ".join(problems) or f"missing files: {sizes}")
+
+
+def test_game_life():
+    js = (ROOT / "assets" / "game" / "room.js").read_text(encoding="utf-8")
+    css = (ROOT / "assets" / "game" / "room.css").read_text(encoding="utf-8")
+    problems = []
+    if "Hey, I\u2019m Tim" not in js and "Hey, I'm Tim" not in js:
+        problems.append("no welcome bubble copy")
+    if "'tim_wave'" not in js or "wave" not in js.split("export function init(")[-1]:
+        problems.append("Tim does not wave on load")
+    if "document.hidden" not in js:
+        problems.append("idle timers do not pause when the tab is hidden")
+    if ".flash" not in css or "flash" not in js:
+        problems.append("no camera flash overlay")
+    if "steam" not in js:
+        problems.append("no mug steam idle")
+    check("game_life", not problems, "; ".join(problems))
+
+
 def main():
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

@@ -195,6 +195,7 @@ function showBubble(room, scene, html, { x, y, actions = [] } = {}) {
   b.className = 'bubble';
   b.setAttribute('role', 'status');
   b.innerHTML = `<p>${html}</p>`;
+  b.addEventListener('click', (e) => e.stopPropagation()); // don't send Tim walking
   if (actions.length) {
     const row = doc.createElement('p');
     row.className = 'bubble-actions';
@@ -234,7 +235,11 @@ function createTim(room) {
     el, grid,
     pos: cellFeet(ROOM.start),
     walkId: 0,
+    walking: false,
+    pose: 'idle',
+    lastAction: performance.now(),
     show(sheet, i = 0) {
+      tim.pose = sheet === 'tim_idle_down' ? 'idle' : sheet;
       const frames = sheets[sheet];
       ctx.clearRect(0, 0, 10, 20);
       ctx.drawImage(frames[i % frames.length], 0, 0);
@@ -249,6 +254,11 @@ function createTim(room) {
     // Walks to a cell. Resolves true on arrival, false if a newer walk took over.
     async walkTo(target) {
       const id = (tim.walkId = nextWalkId(tim.walkId));
+      tim.lastAction = performance.now();
+      tim.walking = true;
+      try { return await tim.walkPath(id, target); } finally { if (id === tim.walkId) tim.walking = false; }
+    },
+    async walkPath(id, target) {
       const path = findPath(grid, tim.cell(), target);
       if (!path.length) return tim.cell().col === target.col && tim.cell().row === target.row;
       if (reducedMotion()) {
@@ -287,6 +297,12 @@ function createTim(room) {
       return true;
     },
   };
+  // A friendly wave (a still wave pose under reduced motion).
+  tim.wave = async () => {
+    if (reducedMotion()) { tim.show('tim_wave', 0); await sleep(1200); tim.show('tim_idle_down'); return; }
+    for (let i = 0; i < 6; i++) { if (tim.walking) return; tim.show('tim_wave', i); await sleep(200); }
+    if (!tim.walking) tim.show('tim_idle_down');
+  };
   tim.moveTo(tim.pos.x, tim.pos.y);
   tim.show('tim_idle_down');
   return tim;
@@ -308,6 +324,14 @@ async function useObject(tim, scene, id) {
   if (reducedMotion()) {
     tim.show(o.face === 'left' ? 'tim_walk_left' : 'tim_use');
     return true;
+  }
+  if (o.anim === 'photo') {
+    const flash = doc.createElement('div');
+    flash.className = 'flash';
+    place(flash, 0, 0, NATIVE_W, NATIVE_H);
+    flash.style.zIndex = '700';
+    btn.parentElement.append(flash);
+    setTimeout(() => flash.remove(), 120);
   }
   const steps = 4;
   for (let i = 0; i < steps; i++) {
@@ -343,6 +367,7 @@ function buildRoom(room) {
   backdrop.style.zIndex = '0';
   room.append(backdrop);
 
+  const decor = {};
   for (const d of DECOR) {
     const s = SPRITES[d.sprite];
     const c = spriteCanvas(d.sprite);
@@ -350,6 +375,7 @@ function buildRoom(room) {
     place(c, d.x, d.y, s.w, s.h);
     if (d.flat) c.style.zIndex = '1';
     room.append(c);
+    decor[d.sprite] = c;
   }
 
   const tip = doc.createElement('div');
@@ -380,7 +406,7 @@ function buildRoom(room) {
     room.append(b);
     return b;
   });
-  return { buttons, tip };
+  return { buttons, tip, decor };
 }
 
 function layout(room) {
@@ -437,6 +463,36 @@ export function init() {
     });
     // Warm the story page in the background so the first panel opens instantly.
     (window.requestIdleCallback || ((f) => setTimeout(f, 1200)))(() => loadStory().catch(() => {}));
+
+    // Welcome: Tim waves and says hi; the bubble goes away on the first interaction.
+    const helloText = matchMedia(PHONE_QUERY).matches
+      ? "Hey, I'm Tim — just a kid from Alaska. Tap around."
+      : "Hey, I'm Tim — just a kid from Alaska. Click around (or use Tab).";
+    const hello = showBubble(room, scene, helloText,
+      { x: tim.pos.x, y: tim.pos.y - 22 });
+    hello.classList.add('bubble--hello');
+    tim.wave();
+    const dismiss = () => { hello.remove(); removeEventListener('pointerdown', dismiss); removeEventListener('keydown', dismiss); };
+    addEventListener('pointerdown', dismiss);
+    addEventListener('keydown', dismiss);
+
+    // Idle life: breathing, steam off the mug, and an occasional wander. Paused when the
+    // tab is hidden, a panel is open, Tim is busy, or the visitor prefers reduced motion.
+    const steamFrames = SPRITES.mug.frames.map((f) => paintSprite(f));
+    const mug = scene.decor.mug;
+    let tick = 0;
+    setInterval(() => {
+      if (document.hidden || reducedMotion() || scene.panels.isOpen()) return;
+      tick++;
+      if (mug) { const m = mug.getContext('2d'); m.clearRect(0, 0, mug.width, mug.height); m.drawImage(steamFrames[tick % 2], 0, 0); }
+      if (tim.walking) return;
+      if (tim.pose === 'idle') tim.show('tim_idle_down', tick % 2);
+      if (performance.now() - tim.lastAction > 12000) {
+        const spots = [];
+        for (let r = ROOM.floorTopRow + 2; r < ROOM.rows; r++) for (let c = 0; c < ROOM.cols; c++) if (tim.grid.walkable(c, r)) spots.push({ col: c, row: r });
+        tim.walkTo(spots[Math.floor(Math.random() * spots.length)]);
+      }
+    }, 600);
     room.addEventListener('click', (e) => { // floor click: just walk there
       const r = room.getBoundingClientRect();
       const s = r.width / NATIVE_W;
