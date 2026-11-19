@@ -32,18 +32,27 @@ class HTMLIndex(HTMLParser):
         self.scope_text = {}   # scope name -> text
         self.scope_links = {}  # scope name -> [attr dicts of <a>]
         self.scope_elems = {}  # scope name -> [(tag, attr dict)] in document order
+        self.scope_h3 = {}     # scope name -> [h3 text]
+        self._h3 = None
         self._stack = []       # (tag, scope or None)
 
     def _scopes(self):
         return {s for _, s in self._stack if s}
 
     def handle_endtag(self, tag):
+        if tag == "h3" and self._h3 is not None:
+            text = " ".join("".join(self._h3[1]).split())
+            for s in self._scopes():
+                self.scope_h3.setdefault(s, []).append(text)
+            self._h3 = None
         for i in range(len(self._stack) - 1, -1, -1):
             if self._stack[i][0] == tag:
                 del self._stack[i:]
                 break
 
     def handle_data(self, data):
+        if self._h3 is not None:
+            self._h3[1].append(data)
         for s in self._scopes():
             self.scope_text[s] = self.scope_text.get(s, "") + data
 
@@ -51,6 +60,8 @@ class HTMLIndex(HTMLParser):
         a = {k: (v if v is not None else "") for k, v in attrs}
         scope = "header" if tag == "header" else (
             a["id"] if tag == "section" and "id" in a else None)
+        if tag == "h3":
+            self._h3 = (tag, [])
         if tag not in ("meta", "link", "img", "br", "hr", "input", "source"):
             self._stack.append((tag, scope))
         for s in self._scopes():
@@ -355,6 +366,36 @@ def test_no_hidden_without_js():
                 bad.append(part)
     check("no_hidden_without_js", not bad,
           f"hides .reveal/.stop without a .js guard: {bad}")
+
+
+FEATURE_TITLES = ["Production escalations", "Zero-loss data migrations",
+                  "AI-powered self-serve tooling", "Automation & mentoring"]
+
+
+def test_features():
+    idx = parse_index()
+    elems = idx.scope_elems.get("features", [])
+    cards = [a for _, a in elems if "feature" in a.get("class", "").split()]
+    lis = []
+    in_int = False
+    # integrations <li> count: li elements following the .integrations <ul>
+    for tag, a in elems:
+        if tag == "ul":
+            in_int = "integrations" in a.get("class", "").split()
+        elif tag == "li" and in_int:
+            lis.append(a)
+    text = " ".join(idx.scope_text.get("features", "").split())
+    problems = []
+    if len(cards) != 4:
+        problems.append(f"{len(cards)} .feature cards, want 4")
+    if idx.scope_h3.get("features", []) != FEATURE_TITLES:
+        problems.append(f"h3 texts {idx.scope_h3.get('features', [])}")
+    for phrase in ("95%", "zero data loss", "30%", "24 hours", "1\u20132 hours"):
+        if phrase not in text:
+            problems.append(f"missing '{phrase}'")
+    if len(lis) < 12:
+        problems.append(f"{len(lis)} integrations li, want >= 12")
+    check("features", not problems, "; ".join(problems))
 
 
 def main():

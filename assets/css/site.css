@@ -272,6 +272,44 @@ section { padding-block: var(--space-6); scroll-margin-top: 4rem; }
   }
 }
 
+/* ---- 03 · features ---- */
+#features { border-top: 1.5px solid var(--ink); }
+.features-head { max-width: 40rem; margin-bottom: var(--space-5); }
+.features-head h2 {
+  margin: 0 0 var(--space-3);
+  font-weight: 700; font-size: var(--fs-2xl);
+  line-height: 1.02; letter-spacing: -0.02em; text-transform: uppercase;
+}
+.features-intro { margin: 0; color: var(--muted); }
+.feature-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-3); }
+.feature {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  min-width: 0; padding: var(--space-4);
+  background: var(--paper); border: 1.5px solid var(--ink);
+}
+.feature p { margin: 0; }
+.feature-metric {
+  padding-bottom: var(--space-2); border-bottom: 1.5px dashed var(--topo);
+  font-family: var(--font-mono); font-weight: 600; font-size: var(--fs-xs);
+  letter-spacing: 0.04em; line-height: 1.5; color: var(--rust-text);
+  overflow-wrap: anywhere;
+}
+.feature h3 { margin: var(--space-2) 0 0; font-weight: 700; font-size: var(--fs-lg); line-height: 1.15; letter-spacing: -0.01em; }
+.feature p:not(.feature-metric) { color: var(--muted); }
+.integrations-wrap { margin-top: var(--space-5); }
+.integrations-title {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-mono); font-weight: 600; font-size: var(--fs-xs);
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.integrations { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.integrations li {
+  padding: 0.3rem 0.6rem; border: 1.5px solid var(--ink);
+  font-family: var(--font-mono); font-size: var(--fs-xs); line-height: 1.4;
+}
+@media (min-width: 640px) { .feature-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1100px) { .feature-grid { grid-template-columns: repeat(4, 1fr); } }
+
 /* nav "you are here" marker (set by initNav) */
 .nav-links a[aria-current="true"] {
   color: var(--rust-text);
