@@ -367,7 +367,7 @@ section { padding-block: var(--space-6); scroll-margin-top: 4rem; }
 .contact-copy p:not(.section-label) { margin: 0 0 var(--space-4); max-width: 34rem; color: var(--muted); }
 .contact-copy h2 { font-size: var(--fs-3xl); line-height: 0.98; letter-spacing: -0.03em; }
 .contact-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
-.contact-copy .contact-email { margin: var(--space-3) 0 0; font-family: var(--font-mono); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.contact-copy p.contact-email { margin: var(--space-3) 0 0; font-family: var(--font-mono); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .contact-email a { color: var(--rust-text); }
 .contact-photo { max-width: 22rem; }
 
