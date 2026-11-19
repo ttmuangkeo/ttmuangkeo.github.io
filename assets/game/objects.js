@@ -10,7 +10,7 @@ export const ROOM = {
     [3, 5], [4, 5], [5, 5],                                       // bookshelf
     ...[11, 12, 13, 14, 15, 16, 17].flatMap((c) => [[c, 5], [c, 6], [c, 7]]), // desk
     [1, 9], [2, 9], [3, 9], [1, 10], [2, 10], [3, 10],            // camera bag
-    [18, 6], [19, 6], [18, 7], [19, 7],                           // mailbox post
+    [19, 8],                                                      // mailbox post
   ],
 };
 
@@ -36,6 +36,6 @@ export const OBJECTS = [
     ariaLabel: 'Truck keys: sitrepp.io, the trip planner Tim is building', useSpot: { col: 18, row: 5 }, face: 'up', anim: 'jingle' },
   { id: 'camera', label: 'Camera bag', sprite: 'camera', x: 10, y: 72,
     ariaLabel: 'Camera bag: Summit Peak Venture and photography', useSpot: { col: 4, row: 10 }, face: 'left', anim: 'photo' },
-  { id: 'mailbox', label: 'Mailbox', sprite: 'mailbox', x: 146, y: 44,
-    ariaLabel: 'Mailbox: get in touch with Tim', useSpot: { col: 18, row: 8 }, face: 'up', anim: 'open' },
+  { id: 'mailbox', label: 'Mailbox', sprite: 'mailbox', x: 148, y: 44,
+    ariaLabel: 'Mailbox: get in touch with Tim', useSpot: { col: 18, row: 9 }, face: 'up', anim: 'open' },
 ];

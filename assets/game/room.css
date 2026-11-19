@@ -88,6 +88,12 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
   pointer-events: none;
 }
 
+.tim { pointer-events: none; transition: opacity 120ms linear; }
+.tim::after { /* soft shadow under his feet */
+  content: ""; position: absolute; left: 10%; right: 10%; bottom: calc(var(--s) * -1px);
+  height: calc(var(--s) * 2px); background: rgba(0, 0, 0, 0.25); border-radius: 50%; z-index: -1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .obj { transition: none; }
 }

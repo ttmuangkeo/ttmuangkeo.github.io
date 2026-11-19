@@ -92,3 +92,58 @@ test('fitScale on desktop is the largest whole number that fits', () => {
 test('fitScale on phones fits the width', () => {
   assert.equal(fitScale(375, 812, 48, true), 375 / 160);
 });
+
+// ---------- Task 4: walk grid and pathfinding ----------
+import { buildGrid, findPath, nextWalkId } from '../assets/game/grid.js';
+
+test('findPath walks a straight line', () => {
+  const g = buildGrid(5, 3, []);
+  assert.deepEqual(findPath(g, { col: 0, row: 1 }, { col: 3, row: 1 }),
+    [{ col: 1, row: 1 }, { col: 2, row: 1 }, { col: 3, row: 1 }]);
+});
+
+test('findPath routes around a blocked cell', () => {
+  const g = buildGrid(3, 3, [[1, 1]]);
+  const path = findPath(g, { col: 0, row: 1 }, { col: 2, row: 1 });
+  assert.equal(path.length, 4);
+  assert.ok(!path.some((p) => p.col === 1 && p.row === 1), 'path must avoid the blocked cell');
+  assert.deepEqual(path.at(-1), { col: 2, row: 1 });
+});
+
+test('findPath returns [] when unreachable', () => {
+  const g = buildGrid(3, 3, [[1, 0], [1, 1], [1, 2]]);
+  assert.deepEqual(findPath(g, { col: 0, row: 0 }, { col: 2, row: 2 }), []);
+});
+
+test('findPath returns [] for the same cell', () => {
+  const g = buildGrid(3, 3, []);
+  assert.deepEqual(findPath(g, { col: 1, row: 1 }, { col: 1, row: 1 }), []);
+});
+
+test('every object useSpot is reachable from where Tim starts', () => {
+  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked, ROOM.floorTopRow);
+  for (const o of OBJECTS) {
+    const path = findPath(g, ROOM.start, o.useSpot);
+    assert.ok(path.length > 0, `${o.id} unreachable`);
+  }
+});
+
+test('the walk grid treats the wall rows as blocked', () => {
+  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked, ROOM.floorTopRow);
+  assert.equal(g.walkable(5, ROOM.floorTopRow - 1), false);
+  assert.equal(g.walkable(ROOM.start.col, ROOM.start.row), true);
+});
+
+test('retarget: a newer walk id supersedes the old one', () => {
+  const first = nextWalkId(0);
+  const second = nextWalkId(first);
+  assert.ok(second > first);
+  assert.notEqual(first, second);
+});
+
+import { walkSpeed } from '../assets/game/grid.js';
+
+test('walkSpeed keeps any walk at or under 1.2 seconds', () => {
+  assert.equal(walkSpeed(24), 48);            // short walks use the base speed
+  assert.ok(200 / walkSpeed(200) <= 1.2 + 1e-9); // long walks speed up
+});
