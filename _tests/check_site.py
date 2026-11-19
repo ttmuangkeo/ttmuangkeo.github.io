@@ -723,6 +723,22 @@ def test_room_stacking_isolated():
     check("room_stacking_isolated", ok, "#room needs isolation: isolate so sprites never cover panels")
 
 
+def test_tray_markup():
+    js = (ROOT / "assets" / "game" / "room.js").read_text(encoding="utf-8")
+    css = (ROOT / "assets" / "game" / "room.css").read_text(encoding="utf-8")
+    problems = []
+    if "tray-btn" not in js:
+        problems.append("room.js does not create .tray-btn buttons")
+    phone = "".join(re.findall(r"@media \(max-width: 640px\)\s*\{(.*?)\n\}", css, re.S))
+    if ".tray-btn" not in phone or not re.search(r"min-height:\s*(4[4-9]|[5-9]\d|\d{3})px", phone):
+        problems.append("phone media block lacks .tray-btn with min-height >= 44px")
+    if "grid-template-columns: repeat(4" not in phone:
+        problems.append("tray is not a 4-column grid on phones")
+    if "hud-menu" not in js or "aria-expanded" not in js:
+        problems.append("HUD menu toggle with aria-expanded missing")
+    check("tray_markup", not problems, "; ".join(problems))
+
+
 def main():
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

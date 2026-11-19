@@ -197,3 +197,39 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
   }
 }
 @media (prefers-reduced-motion: reduce) { .panel-body .strip { scroll-behavior: auto; } }
+
+/* ---------- HUD menu toggle (phones only, JS only) ---------- */
+.hud-menu {
+  display: none; width: 2.75rem; height: 2.75rem; border: 2px solid var(--ink); background: var(--paper);
+  color: var(--ink); font: 600 1.1rem/1 var(--font-mono); cursor: pointer;
+}
+
+/* ---------- phone object tray ---------- */
+.tray-head { margin: 0 0 0.5rem; font: 600 0.72rem var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: #d8d2c3; }
+.tray-grid { display: grid; gap: 0.5rem; }
+.tray-btn {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem;
+  padding: 0.4rem 0.2rem; border: 2px solid var(--ink); background: var(--paper); color: var(--ink);
+  font: 600 0.62rem/1.15 var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer;
+  box-shadow: 0 3px 0 var(--ink);
+}
+.tray-btn .px { width: 32px; height: 32px; }
+.tray-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+.tray-btn.is-found::after {
+  content: "✓"; position: absolute; top: -0.45rem; right: -0.45rem; width: 1.2rem; height: 1.2rem;
+  display: grid; place-items: center; background: var(--rust-text); color: var(--paper); font-size: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  html.game-ready .stage { padding: 0; }
+  html.game-ready #tray { display: block; padding: 0.9rem 0.75rem 1.5rem; }
+  .tray-grid { grid-template-columns: repeat(4, 1fr); }
+  .tray-btn { min-height: 64px; }
+  html.game-ready .hud { flex-wrap: wrap; padding: 0.5rem 0.75rem; }
+  html.game-ready .hud-role, html.game-ready .hud-found { display: none; }
+  html.game-ready .hud-menu { display: inline-grid; place-items: center; }
+  html.game-ready .hud-actions { margin-left: auto; }
+  html.game-ready .hud-actions .hud-btn:not(.hud-btn--ink) { display: none; }
+  html.game-ready .hud.hud-open .hud-actions { width: 100%; order: 3; }
+  html.game-ready .hud.hud-open .hud-actions .hud-btn { display: inline-block; flex: 1; text-align: center; }
+}

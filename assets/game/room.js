@@ -136,6 +136,59 @@ function createProgress(scene) {
   };
 }
 
+// Phone object tray: 8 big icon buttons under the room that work exactly like tapping the object.
+function buildTray(scene) {
+  const tray = doc.getElementById('tray');
+  const head = doc.createElement('p');
+  head.className = 'tray-head';
+  head.innerHTML = 'Tap something · Found <span class="tray-count">0</span>/8';
+  const grid = doc.createElement('div');
+  grid.className = 'tray-grid';
+  const buttons = OBJECTS.map((o) => {
+    const b = doc.createElement('button');
+    b.type = 'button';
+    b.className = 'tray-btn';
+    b.dataset.object = o.id;
+    b.setAttribute('aria-label', o.ariaLabel);
+    const icon = spriteCanvas(`icon_${o.id}`);
+    const label = doc.createElement('span');
+    label.textContent = o.label;
+    b.append(icon, label);
+    b.addEventListener('click', () => scene.activate(o.id, b));
+    grid.append(b);
+    return b;
+  });
+  tray.replaceChildren(head, grid);
+  return {
+    render(found) {
+      head.querySelector('.tray-count').textContent = String(found.count());
+      for (const b of buttons) b.classList.toggle('is-found', found.isFound(b.dataset.object));
+    },
+  };
+}
+
+// On phones the HUD collapses to name + Resume + a menu holding Get in touch / Story mode.
+function setupHudMenu() {
+  const hud = doc.querySelector('.hud');
+  const actions = hud?.querySelector('.hud-actions');
+  if (!hud || !actions) return;
+  const btn = doc.createElement('button');
+  btn.type = 'button';
+  btn.className = 'hud-menu';
+  btn.setAttribute('aria-expanded', 'false');
+  btn.setAttribute('aria-label', 'More links');
+  btn.textContent = '☰';
+  btn.addEventListener('click', () => {
+    const open = btn.getAttribute('aria-expanded') !== 'true';
+    btn.setAttribute('aria-expanded', String(open));
+    hud.classList.toggle('hud-open', open);
+  });
+  hud.append(btn);
+  actions.addEventListener('click', (e) => {
+    if (e.target.closest('a')) { btn.setAttribute('aria-expanded', 'false'); hud.classList.remove('hud-open'); }
+  });
+}
+
 function showBubble(room, scene, html, { x, y, actions = [] } = {}) {
   room.querySelector('.bubble')?.remove();
   const b = doc.createElement('div');
@@ -349,7 +402,10 @@ export function init() {
     scene.tim = tim;
     scene.use = (id) => useObject(tim, scene, id);
     scene.panels = createPanels(scene);
+    const tray = buildTray(scene);
+    scene.onProgress = (found) => tray.render(found);
     scene.progress = createProgress(scene);
+    setupHudMenu();
     let pendingCelebration = false;
     scene.onPanelOpened = (id) => { pendingCelebration = scene.progress.mark(id) || pendingCelebration; };
     scene.onPanelClosed = () => {
