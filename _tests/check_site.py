@@ -18,7 +18,14 @@ def check(name, ok, reason=""):
 
 
 def load_index():
+    """The game homepage."""
     p = ROOT / "index.html"
+    return p.read_text(encoding="utf-8") if p.exists() else ""
+
+
+def load_story():
+    """The full-text Field Manual page (story mode)."""
+    p = ROOT / "story" / "index.html"
     return p.read_text(encoding="utf-8") if p.exists() else ""
 
 
@@ -101,10 +108,15 @@ class HTMLIndex(HTMLParser):
                 self.metas[key] = a["content"]
 
 
-def parse_index():
+def parse_html(text):
     p = HTMLIndex()
-    p.feed(load_index())
+    p.feed(text)
     return p
+
+
+def parse_index():
+    """Parses the story page: every content test checks the Field Manual text."""
+    return parse_html(load_story())
 
 
 SKIP_DIRS = {".git", ".superpowers"}
@@ -311,7 +323,7 @@ def test_hero_content():
     hero = idx.scope_text.get("trailhead", "").lower()
     hero_links = idx.scope_links.get("trailhead", [])
     head_links = idx.scope_links.get("header", [])
-    resume = "assets/Tim_Muangkeo_Resume.pdf"
+    resume = "../assets/Tim_Muangkeo_Resume.pdf"
     problems = []
     if "just a kid from alaska" not in hero:
         problems.append("hero missing headline")
@@ -449,7 +461,7 @@ def test_timeline_facts():
     if any(e["open"] for e in entries[1:]):
         problems.append("only the first entry should be open")
     links = idx.scope_links.get("log", [])
-    if not any(a.get("href") == "assets/Tim_Muangkeo_Resume.pdf" and "download" in a for a in links):
+    if not any(a.get("href") == "../assets/Tim_Muangkeo_Resume.pdf" and "download" in a for a in links):
         problems.append("no resume download link in #log")
     check("timeline_facts", not problems, "; ".join(problems))
 
@@ -485,22 +497,25 @@ def test_contact_links():
     hrefs = [a.get("href") for a in idx.scope_links.get("contact", [])]
     want = ["mailto:tim.muangkeo@gmail.com?subject=Let%27s%20talk%20%E2%80%94%20from%20your%20site",
             "https://www.linkedin.com/in/ttmuangkeo", "https://github.com/ttmuangkeo",
-            "assets/Tim_Muangkeo_Resume.pdf"]
+            "../assets/Tim_Muangkeo_Resume.pdf"]
     missing = [w for w in want if w not in hrefs]
     check("contact_links", not missing, f"missing {missing}")
 
 
 def test_meta_tags():
-    idx = parse_index()
-    m = idx.metas
-    problems = [f"missing {k}" for k in ("description", "og:title", "og:description") if not m.get(k)]
-    for k, v in (("og:image", "https://ttmuangkeo.github.io/assets/img/og.jpg"),
-                 ("og:url", "https://ttmuangkeo.github.io/"),
-                 ("twitter:card", "summary_large_image")):
-        if m.get(k) != v:
-            problems.append(f"{k}={m.get(k)!r}, want {v!r}")
-    if "assets/img/favicon.svg" not in idx.icons:
-        problems.append("no <link rel=icon> to assets/img/favicon.svg")
+    problems = []
+    pages = (("home", parse_html(load_index()), "https://ttmuangkeo.github.io/", "assets/img/favicon.svg"),
+             ("story", parse_index(), "https://ttmuangkeo.github.io/story/", "../assets/img/favicon.svg"))
+    for name, idx, url, icon in pages:
+        m = idx.metas
+        problems += [f"{name}: missing {k}" for k in ("description", "og:title", "og:description") if not m.get(k)]
+        for k, v in (("og:image", "https://ttmuangkeo.github.io/assets/img/og.jpg"),
+                     ("og:url", url),
+                     ("twitter:card", "summary_large_image")):
+            if m.get(k) != v:
+                problems.append(f"{name}: {k}={m.get(k)!r}, want {v!r}")
+        if icon not in idx.icons:
+            problems.append(f"{name}: no <link rel=icon> to {icon}")
     check("meta_tags", not problems, "; ".join(problems))
 
 
@@ -516,11 +531,12 @@ def test_404_exists():
     f = HTMLIndex()
     if ok:
         f.feed(p.read_text(encoding="utf-8"))
-    check("404_exists", ok and "/" in f.links, "404.html missing or has no link to /")
+    check("404_exists", ok and "/" in f.links and "/story/" in f.links,
+          "404.html missing, or lacks links to / and /story/")
 
 
 def test_route_years():
-    html = load_index()
+    html = load_story()
     m = re.search(r'<section id="route".*?</section>', html, re.S)
     sec = m.group(0) if m else ""
     want = {"uaa": "2012\u20132017", "mercutio": "2017", "penwizard": "2017\u20132018",
@@ -555,18 +571,18 @@ def test_inits_guarded():
 
 
 def test_worked_at_logos():
-    html = load_index()
+    html = load_story()
     m = re.search(r'<ul class="worked-at"[^>]*>(.*?)</ul>', html, re.S)
     problems = []
     if not m:
         problems.append("no ul.worked-at strip")
     else:
         strip = m.group(1)
-        for co, path in (("MoxiWorks", "assets/img/logos/moxiworks.svg"),
-                         ("GoodLeap", "assets/img/logos/goodleap.svg")):
+        for co, path in (("MoxiWorks", "../assets/img/logos/moxiworks.svg"),
+                         ("GoodLeap", "../assets/img/logos/goodleap.svg")):
             if not re.search(r'<img[^>]*src="' + re.escape(path) + r'"[^>]*alt="' + co + r'"', strip):
                 problems.append(f"{co} logo img with alt missing")
-            if not (ROOT / path).exists():
+            if not (ROOT / path.replace('../', '')).exists():
                 problems.append(f"{path} missing")
         if re.search(r"trusted by", html, re.I):
             problems.append('"Trusted by" wording implies endorsement')
@@ -576,7 +592,7 @@ def test_worked_at_logos():
 
 
 def test_route_logos():
-    html = load_index()
+    html = load_story()
     expected = {"moxi-support": "moxiworks", "goodleap": "goodleap",
                 "moxi-senior": "moxiworks", "moxi-swe": "moxiworks"}
     names = {"moxiworks": "MoxiWorks", "goodleap": "GoodLeap"}
@@ -584,11 +600,64 @@ def test_route_logos():
     for stop, logo in expected.items():
         m = re.search(r'data-stop="' + stop + r'">(.*?)</li>', html, re.S)
         block = m.group(1) if m else ""
-        pat = (r'<p class="stop-org[^"]*">\s*<img[^>]*src="assets/img/logos/' + logo
+        pat = (r'<p class="stop-org[^"]*">\s*<img[^>]*src="../assets/img/logos/' + logo
                + r'\.svg"[^>]*alt="' + names[logo] + r'"')
         if not re.search(pat, block):
             problems.append(f"{stop}: no {names[logo]} logo in stop-org")
     check("route_logos", not problems, "; ".join(problems))
+
+
+STORY_IDS = ("trailhead", "route", "features", "log", "basecamp", "offtrail", "contact")
+
+
+def test_story_page():
+    html = load_story()
+    idx = parse_html(html)
+    problems = []
+    if not html:
+        problems.append("story/index.html missing")
+    missing = [i for i in STORY_IDS if i not in idx.ids]
+    if missing:
+        problems.append(f"missing sections {missing}")
+    if re.search(r'(?:href|src)="assets/', html):
+        problems.append("relative assets/ paths (need ../assets/)")
+    if "/" not in idx.links:
+        problems.append("no link back to /")
+    check("story_page", not problems, "; ".join(problems))
+
+
+def test_root_hud_static():
+    html = load_index()
+    idx = parse_html(html)
+    hud = idx.scope_text.get("header", "")
+    links = idx.scope_links.get("header", [])
+    problems = []
+    for t in ("Tim Muangkeo", "Software Engineer"):
+        if t not in hud:
+            problems.append(f"HUD missing {t!r}")
+    if not any(l.get("href") == "assets/Tim_Muangkeo_Resume.pdf" and "download" in l for l in links):
+        problems.append("HUD missing resume download")
+    if not any(str(l.get("href", "")).startswith("mailto:tim.muangkeo@gmail.com") for l in links):
+        problems.append("HUD missing mailto")
+    if not any(l.get("href") == "/story/" for l in links):
+        problems.append("HUD missing /story/ link")
+    check("root_hud_static", not problems, "; ".join(problems))
+
+
+def test_root_fallback():
+    html = load_index()
+    m = re.search(r'<section class="fallback".*?</section>', html, re.S)
+    block = m.group(0) if m else ""
+    ok = "Just a kid from Alaska" in block and 'href="/story/"' in block
+    check("root_fallback", ok, "no .fallback section with intro and /story/ link")
+
+
+def test_hash_redirect():
+    html = load_index()
+    scripts = " ".join(re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html, re.S))
+    missing = [i for i in STORY_IDS if i not in scripts]
+    ok = scripts and not missing and "/story/" in scripts and "location" in scripts
+    check("hash_redirect", bool(ok), f"inline redirect missing ids {missing} or /story/")
 
 
 def main():

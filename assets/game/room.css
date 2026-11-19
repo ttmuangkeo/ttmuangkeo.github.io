@@ -1,0 +1,54 @@
+/* Pixel room homepage. Field Manual palette, dark cabin backdrop. */
+:root {
+  --paper: #eee8da;
+  --ink: #1f2a22;
+  --rust: #d9622b;
+  --rust-text: #a8441a;
+  --muted: #38443b;
+  --night: #2a2f2a;
+  --night-2: #1d211d;
+  --font-body: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --hud-h: 3.25rem;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  min-height: 100vh; background: var(--night); color: var(--paper);
+  font-family: var(--font-body); line-height: 1.5;
+}
+a { color: inherit; }
+
+/* ---------- HUD (always visible, plain HTML) ---------- */
+.hud {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  min-height: var(--hud-h); padding: 0.5rem 1rem;
+  background: var(--paper); color: var(--ink); border-bottom: 2px solid var(--ink);
+  font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.hud p { margin: 0; }
+.hud-name strong { font-weight: 600; }
+.hud-role { color: var(--muted); }
+.hud-found { margin-left: auto; font-weight: 600; }
+.hud-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.hud-btn {
+  display: inline-block; padding: 0.4rem 0.7rem; border: 2px solid var(--ink);
+  text-decoration: none; font-weight: 600; white-space: nowrap; background: var(--paper);
+}
+.hud-btn--ink { background: var(--ink); color: var(--paper); }
+.hud-btn:hover, .hud-btn:focus-visible { background: var(--rust-text); border-color: var(--rust-text); color: var(--paper); }
+:focus-visible { outline: 3px solid var(--rust); outline-offset: 2px; }
+
+/* ---------- Fallback (shown until the room is ready) ---------- */
+.fallback { max-width: 38rem; margin: 0 auto; padding: 4rem 1.25rem; }
+.fallback h1 { margin: 0 0 1rem; font-size: clamp(2rem, 6vw, 3.25rem); line-height: 1; text-transform: uppercase; letter-spacing: -0.02em; }
+.fallback p { color: #d8d2c3; font-size: 1.05rem; }
+.fallback-link { display: inline-block; margin-top: 0.5rem; padding: 0.6rem 1rem; border: 2px solid var(--paper); text-decoration: none; font-family: var(--font-mono); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.fallback-link:hover, .fallback-link:focus-visible { background: var(--paper); color: var(--ink); }
+
+/* ---------- Room (only once JS has built it) ---------- */
+.stage, #tray { display: none; }
+html.game-ready .fallback { display: none; }
+html.game-ready .stage { display: flex; justify-content: center; align-items: flex-start; padding: 1rem 0; }
