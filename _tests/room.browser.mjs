@@ -133,6 +133,67 @@ await scenario('panel header is not hidden under a wrapped HUD at mid widths', a
   return r.panel >= r.hud ? '' : `panel top ${r.panel} under HUD bottom ${r.hud}`;
 });
 
+const hold = async (k, kc, ms) => {
+  await send('Input.dispatchKeyEvent', { type: 'keyDown', key: k, code: k, windowsVirtualKeyCode: kc });
+  await sleep(ms);
+  await send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code: k, windowsVirtualKeyCode: kc });
+  await sleep(250);
+};
+const timXY = () => ev(`(() => { const t = document.querySelector('.tim').style; return [+t.getPropertyValue('--x'), +t.getPropertyValue('--y')]; })()`);
+const reduceMotion = (on) => send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: on ? 'reduce' : 'no-preference' }] });
+
+await scenario('arrow keys walk Tim and E uses what he is standing next to', async () => {
+  await open();
+  const [x0] = await timXY();
+  await hold('ArrowRight', 39, 800);
+  const [x1] = await timXY();
+  if (!(x1 > x0 + 20)) return `Tim did not walk right: ${x0} -> ${x1}`;
+  await hold('ArrowUp', 38, 250);
+  const tip = await ev(`document.querySelector('#room .tip').hidden ? '' : document.querySelector('#room .tip').textContent`);
+  if (tip !== 'E · Laptop') return `reach hint was ${JSON.stringify(tip)}`;
+  await key('e', 69); await sleep(2200);
+  const p = await panel();
+  return p.open && p.obj === 'laptop' ? '' : `panel ${JSON.stringify(p)}`;
+});
+
+await scenario('the Konami code brings up the northern lights', async () => {
+  await open();
+  const before = await ev(`document.getElementById('room').dataset.sky`);
+  if (!/^(dawn|day|dusk|night)(_rain)?$/.test(before || '')) return `window sky is ${before}`;
+  for (const [k, kc] of [['ArrowUp', 38], ['ArrowUp', 38], ['ArrowDown', 40], ['ArrowDown', 40], ['ArrowLeft', 37], ['ArrowRight', 39], ['ArrowLeft', 37], ['ArrowRight', 39], ['b', 66], ['a', 65]]) await key(k, kc);
+  const sky = await ev(`document.getElementById('room').dataset.sky`);
+  return sky === 'aurora' ? '' : `sky is ${sky}`;
+});
+
+await scenario('the pager panel runs a triage ticket to a verdict, then Get in touch works', async () => {
+  await reduceMotion(true);
+  try {
+    await open();
+    await ev(`document.querySelector('[data-object="pager"]').click()`); await sleep(1500);
+    if ((await panel()).obj !== 'pager') return 'pager panel did not open';
+    await ev(`document.querySelector('#panel .inc-callout button').click()`); await sleep(300);
+    if ((await panel()).obj !== 'incident') return `triage panel did not open: ${JSON.stringify(await panel())}`;
+    await ev(`document.querySelector('#panel [data-guess="bug"]').click()`); await sleep(400);
+    const r = await ev(`(() => { const d = document.getElementById('panel'); return { lines: d.querySelectorAll('.inc-log p').length, done: !d.querySelector('.inc-result').hidden, focus: d.contains(document.activeElement), score: d.querySelector('.inc-score').textContent }; })()`);
+    if (!(r.lines >= 6 && r.done && r.focus && /^0\.\d\d$/.test(r.score))) return `triage run incomplete: ${JSON.stringify(r)}`;
+    await ev(`[...document.querySelectorAll('#panel .inc-actions button')].find((b) => b.textContent === 'Get in touch').click()`); await sleep(500);
+    const p = await panel();
+    return p.open && p.obj === 'mailbox' ? '' : `Get in touch opened ${JSON.stringify(p)}`;
+  } finally { await reduceMotion(false); }
+});
+
+await scenario('the pager goes off once per visit and Triage it opens the game', async () => {
+  const fast = `const st = window.setTimeout; window.setTimeout = (f, ms, ...a) => st(f, ms === 15000 ? 50 : ms, ...a);`;
+  await open({ before: `try { sessionStorage.clear(); } catch {} ${fast}` });
+  const bubble = await ev(`!!document.querySelector('#room .bubble--pager') && document.querySelector('[data-object="pager"]').classList.contains('is-buzzing')`);
+  if (!bubble) return 'pager did not buzz';
+  await ev(`document.querySelector('#room .bubble--pager .bubble-btn--ink').click()`); await sleep(300);
+  const p = await panel();
+  if (!(p.open && p.obj === 'incident')) return `Triage it opened ${JSON.stringify(p)}`;
+  await open({ before: fast });
+  return (await ev(`!!document.querySelector('#room .bubble--pager')`)) ? 'pager buzzed again in the same visit' : '';
+});
+
 ws.close(); cleanup();
 let failed = 0;
 for (const [name, ok, why] of results) { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${ok ? '' : ': ' + why}`); if (!ok) failed++; }

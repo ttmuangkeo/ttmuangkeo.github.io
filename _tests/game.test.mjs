@@ -199,3 +199,79 @@ test('allFound only after all 8, and ignores unknown ids', () => {
   s.markFound('mailbox');
   assert.equal(s.allFound(), true);
 });
+
+// ---------- keyboard play, the window sky, and the pager mini-game ----------
+import { KEY_DIRS, KONAMI, nextCell, objectInReach, createSequence } from '../assets/game/controls.js';
+import { skyPhase, isRaining, skyNow } from '../assets/game/sky.js';
+import { TICKETS, VERDICTS, verdictFor, createIncidentPanel } from '../assets/game/incident.js';
+import { SKY_PHASES } from '../assets/game/sprites.js';
+
+test('arrows and WASD map to the four directions', () => {
+  for (const [keys, dir] of [[['ArrowUp', 'w', 'W'], 'up'], [['ArrowDown', 's', 'S'], 'down'], [['ArrowLeft', 'a', 'A'], 'left'], [['ArrowRight', 'd', 'D'], 'right']]) {
+    for (const k of keys) assert.equal(KEY_DIRS[k], dir, k);
+  }
+  assert.deepEqual(nextCell({ col: 3, row: 7 }, 'up'), { col: 3, row: 6 });
+  assert.deepEqual(nextCell({ col: 3, row: 7 }, 'right'), { col: 4, row: 7 });
+});
+
+test('objectInReach finds the object Tim is standing at or next to', () => {
+  for (const o of OBJECTS) assert.equal(objectInReach(o.useSpot, OBJECTS)?.id, o.id, o.id);
+  assert.equal(objectInReach(ROOM.start, OBJECTS), null);
+  const pager = OBJECTS.find((o) => o.id === 'pager').useSpot;
+  assert.equal(objectInReach({ col: pager.col + 1, row: pager.row }, OBJECTS)?.id, 'pager');
+});
+
+test('createSequence fires on the Konami code and recovers from mistakes', () => {
+  const seq = createSequence(KONAMI);
+  const feed = (keys) => keys.map((k) => seq(k));
+  assert.deepEqual(feed(KONAMI).at(-1), true);
+  assert.ok(!feed(['ArrowUp', 'ArrowDown']).some(Boolean));
+  const again = createSequence(KONAMI);
+  // a wrong key mid-way, then a full correct run (letters in either case)
+  ['ArrowUp', 'ArrowUp', 'x'].forEach(again);
+  assert.equal(KONAMI.slice(0, -2).concat(['B', 'A']).map(again).at(-1), true);
+});
+
+test('skyPhase follows Seattle daylight', () => {
+  assert.equal(skyPhase(12, 5), 'day');     // June noon
+  assert.equal(skyPhase(22.5, 5), 'night'); // June 10:30 PM
+  assert.equal(skyPhase(21, 5), 'dusk');    // June 9 PM
+  assert.equal(skyPhase(17.5, 11), 'night'); // December 5:30 PM
+  assert.equal(skyPhase(16.3, 11), 'dusk');
+  assert.equal(skyPhase(7.8, 11), 'dawn');
+});
+
+test('skyNow reads Seattle time and rain is stable within an hour', () => {
+  const s = skyNow(new Date('2026-11-20T04:00:00Z'));
+  assert.equal(s.label, '8:00 PM');
+  assert.equal(s.phase, 'night');
+  assert.match(s.text, /^Seattle · 8:00 PM · /);
+  const a = new Date('2026-11-20T20:05:00Z'), b = new Date('2026-11-20T20:55:00Z');
+  assert.equal(isRaining(a, 10), isRaining(b, 10));
+  let wet = 0;
+  for (let h = 0; h < 2000; h++) wet += isRaining(new Date(Date.UTC(2026, 0, 1) + h * 3_600_000), 0);
+  assert.ok(wet > 600 && wet < 1200, `January rain share ${wet}/2000`);
+});
+
+test('every window sky has a sprite, with rain variants except the aurora', () => {
+  for (const p of SKY_PHASES) {
+    assert.equal(SPRITES[`window_${p}`]?.w, 30, p);
+    assert.equal(SPRITES[`window_${p}`].frames.length, 2, p);
+    assert.equal(Boolean(SPRITES[`window_${p}_rain`]), p !== 'aurora', `${p} rain`);
+  }
+});
+
+test('triage tickets are complete and their scores match their verdicts', () => {
+  assert.ok(TICKETS.length >= 3);
+  const verdicts = new Set(TICKETS.map((t) => verdictFor(t.score)));
+  assert.deepEqual([...verdicts].sort(), Object.keys(VERDICTS).sort(), 'every verdict appears at least once');
+  for (const t of TICKETS) {
+    assert.match(t.key, /^SUP-\d+$/);
+    for (const f of ['title', 'body', 'finding', 'next', 'outcome']) assert.ok(t[f], `${t.key} ${f}`);
+    assert.ok(t.signals.length && t.probes.length, `${t.key} signals/probes`);
+    assert.ok(t.score > 0 && t.score < 1, `${t.key} score`);
+  }
+  const panel = createIncidentPanel({ doc: {} });
+  assert.equal(typeof panel.render, 'function');
+  assert.ok(panel.title && panel.story.startsWith('#'));
+});

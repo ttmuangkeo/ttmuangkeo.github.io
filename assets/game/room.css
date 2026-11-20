@@ -243,3 +243,48 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
 @media (max-width: 640px) {
   #room > .bubble { font-size: 0.8rem; padding: 0.4rem 0.55rem; }
 }
+
+/* ---------- window, pager buzz ---------- */
+#room > .win { background: none; }
+.obj.is-buzzing { animation: buzz 0.24s steps(2) infinite; }
+@keyframes buzz {
+  from { transform: translateX(calc(var(--s) * -0.6px)); }
+  to { transform: translateX(calc(var(--s) * 0.6px)); }
+}
+@media (prefers-reduced-motion: reduce) { .obj.is-buzzing { animation: none; } }
+
+/* ---------- pager mini-game (inside the panel) ---------- */
+.inc-callout {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem 1rem;
+  padding: 0.7rem 0.9rem; border: 2px dashed var(--rust); background: #fbf3e6;
+}
+.inc-note { font: 0.72rem/1.5 var(--font-mono); color: var(--muted); }
+.inc-ticket { padding: 0.8rem 0.95rem; border: 2px solid var(--ink); background: #fffdf7; box-shadow: 4px 4px 0 var(--ink); }
+.inc-ticket h3 { margin: 0.25rem 0 0.35rem !important; }
+.inc-key { font: 600 0.7rem var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--rust-text); }
+.inc-guess { margin: 0; padding: 0; border: 0; }
+.inc-guess legend { padding: 0; font-weight: 700; }
+.inc-guess-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem !important; }
+.inc-guess .bubble-btn[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.inc-guess .bubble-btn:disabled { cursor: default; }
+.inc-guess .bubble-btn:disabled:not([aria-pressed="true"]) { opacity: 0.45; }
+.inc-run > * + * { margin-top: 0.8rem; }
+.inc-log {
+  min-height: 6rem; padding: 0.75rem 0.9rem; background: #1d211d; color: #d8e6da;
+  border: 2px solid var(--ink); font: 0.76rem/1.55 var(--font-mono); overflow-wrap: anywhere;
+}
+.inc-log:focus { outline: none; }
+.inc-log p { margin: 0 !important; padding-left: 3.6rem; text-indent: -3.6rem; } /* wrapped lines hang under the text */
+.inc-tag { display: inline-block; min-width: 3.6rem; text-indent: 0; font-weight: 600; color: #6fd38a; }
+.inc-tag--score, .inc-tag--found { color: #f2d34b; }
+.inc-tag--next { color: #f2a65a; }
+.inc-meter { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.75rem; font: 600 0.72rem var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; }
+.inc-bar { height: 0.9rem; border: 2px solid var(--ink); background: #e6dcc6; }
+.inc-bar-fill { display: block; height: 100%; width: 0; background: var(--rust); transition: width 0.8s steps(10); }
+.inc-meter.is-scored .inc-bar-fill { width: calc(var(--v) * 100%); }
+.inc-meter[data-verdict="not-bug"] .inc-bar-fill { background: #3fa862; }
+.inc-meter[data-verdict="needs-info"] .inc-bar-fill { background: #e0b33a; }
+.inc-verdict { font-weight: 700; font-size: 1.05rem; }
+.inc-foot { color: var(--muted); font-size: 0.9rem; }
+.inc-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+@media (prefers-reduced-motion: reduce) { .inc-bar-fill { transition: none; } }

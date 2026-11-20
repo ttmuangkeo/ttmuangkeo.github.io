@@ -5,6 +5,9 @@ import { OBJECTS, DECOR, ROOM } from './objects.js';
 import { fitScale, buildGrid, findPath, nextWalkId, walkSpeed, NATIVE_W, NATIVE_H } from './grid.js';
 import { PANELS } from './panels.js';
 import { createFoundState } from './state.js';
+import { KEY_DIRS, KONAMI, nextCell, objectInReach, createSequence } from './controls.js';
+import { skyNow } from './sky.js';
+import { createIncidentPanel } from './incident.js';
 
 // ---------- panels: content comes from the story page, never duplicated here ----------
 let storyPromise = null;
@@ -105,7 +108,7 @@ function createPanels(scene) {
         if (dialog.open) dialog.close();
       }
       opener = from || doc.activeElement;
-      const p = PANELS[id];
+      const p = PANELS[id] ?? scene.extraPanels?.[id];
       const head = doc.createElement('header');
       head.className = 'panel-head';
       head.innerHTML = `<h2 id="panel-title" tabindex="-1"></h2><button type="button" class="panel-close" aria-label="Close">×</button>`;
@@ -119,10 +122,16 @@ function createPanels(scene) {
       show();
       const mine = token;
       head.querySelector('h2').focus();
+      if (p.render) { // game panels (the pager mini-game) build their own content
+        p.render(body, { alive: () => mine === token, reduced: reducedMotion() });
+        scene.onPanelOpened?.(id);
+        return;
+      }
       try {
         const story = await loadStory();
         if (mine !== token) return; // closed or replaced while loading
         body.replaceChildren(panelContent(story, id));
+        scene.decoratePanel?.(id, body);
       } catch {
         if (mine !== token) return;
         body.innerHTML = id === 'mailbox'
@@ -272,16 +281,24 @@ function createTim(room) {
     cell() {
       return { col: Math.floor(tim.pos.x / ROOM.cell), row: Math.floor(tim.pos.y / ROOM.cell) };
     },
+    stride: 0, // distance walked so far, so chained one-cell steps keep cycling the walk frames
     // Walks to a cell. Resolves true on arrival, false if a newer walk took over.
-    async walkTo(target) {
+    // settle: false keeps the walk pose at the end (keyboard steps chain into the next one).
+    async walkTo(target, { settle = true } = {}) {
       const id = (tim.walkId = nextWalkId(tim.walkId));
       tim.lastAction = performance.now();
       tim.walking = true;
-      try { return await tim.walkPath(id, target); } finally { if (id === tim.walkId) tim.walking = false; }
+      try { return await tim.walkPath(id, target, settle); } finally { if (id === tim.walkId) tim.walking = false; }
     },
-    async walkPath(id, target) {
+    async walkPath(id, target, settle) {
       const path = findPath(grid, tim.cell(), target);
       if (!path.length) return tim.cell().col === target.col && tim.cell().row === target.row;
+      if (reducedMotion() && path.length === 1) { // a single keyboard step: move, no fade
+        const end = cellFeet(target);
+        tim.moveTo(end.x, end.y);
+        await sleep(90);
+        return id === tim.walkId;
+      }
       if (reducedMotion()) {
         el.style.opacity = '0';
         await sleep(120);
@@ -306,15 +323,16 @@ function createTim(room) {
             if (t0 === null) t0 = now;
             const k = Math.min(1, ((now - t0) / 1000) * speed / dist);
             tim.moveTo(start.x + dx * k, start.y + dy * k);
-            tim.show(`tim_walk_${dir}`, Math.floor((travelled + dist * k) / 4));
+            tim.show(`tim_walk_${dir}`, Math.floor((tim.stride + travelled + dist * k) / 4));
             if (k < 1) requestAnimationFrame(tick); else resolve();
           };
           requestAnimationFrame(tick);
         });
-        if (id !== tim.walkId) return false;
+        if (id !== tim.walkId) { tim.stride += travelled; return false; }
         travelled += dist;
       }
-      tim.show('tim_idle_down');
+      tim.stride += travelled;
+      if (settle) tim.show('tim_idle_down');
       return true;
     },
   };
@@ -407,6 +425,16 @@ function buildRoom(room) {
   tip.hidden = true;
   room.append(tip);
 
+  // The one tooltip, shown above an object, the window, or Tim.
+  const tipAt = (x, y, text) => {
+    tip.textContent = text;
+    place(tip, x, Math.max(2, y), 0, 0);
+    tip.style.zIndex = '500';
+    tip.hidden = false;
+  };
+  const tipFor = (o, text = o.label) => tipAt(o.x + SPRITES[o.sprite].w / 2, o.y - 7, text);
+  const hide = () => { tip.hidden = true; };
+
   const buttons = OBJECTS.map((o) => {
     const s = SPRITES[o.sprite];
     const b = doc.createElement('button');
@@ -416,13 +444,7 @@ function buildRoom(room) {
     b.setAttribute('aria-label', o.ariaLabel);
     b.append(spriteCanvas(o.sprite));
     place(b, o.x, o.y, s.w, s.h);
-    const show = () => {
-      tip.textContent = o.label;
-      place(tip, o.x + s.w / 2, Math.max(2, o.y - 7), 0, 0);
-      tip.style.zIndex = '500';
-      tip.hidden = false;
-    };
-    const hide = () => { tip.hidden = true; };
+    const show = () => tipFor(o);
     b.addEventListener('pointerenter', show);
     b.addEventListener('focus', show);
     b.addEventListener('pointerleave', hide);
@@ -430,7 +452,177 @@ function buildRoom(room) {
     room.append(b);
     return b;
   });
-  return { buttons, tip, decor };
+  return { buttons, tip, decor, tipAt, tipFor, hideTip: hide };
+}
+
+// ---------- the window: Seattle's real time of day, rain now and then, a secret aurora ----------
+const WIN = { x: 108, y: 8, w: 30, h: 22 };
+function createWindow(room, scene) {
+  const canvas = doc.createElement('canvas');
+  canvas.width = WIN.w; canvas.height = WIN.h;
+  canvas.className = 'px layer';
+  canvas.setAttribute('aria-hidden', 'true');
+  place(canvas, WIN.x, WIN.y, WIN.w, WIN.h);
+  canvas.style.zIndex = '1';
+  room.append(canvas);
+  // Pointer-only hit area: hover shows Seattle's time; five quick taps call up the aurora
+  // (keyboard visitors get the same secret with the Konami code).
+  const hit = doc.createElement('div');
+  hit.className = 'win';
+  hit.setAttribute('aria-hidden', 'true');
+  place(hit, WIN.x, WIN.y, WIN.w, WIN.h);
+  hit.style.zIndex = '2';
+  room.append(hit);
+
+  const cache = {};
+  const frames = (key) => (cache[key] ??= SPRITES[key].frames.map((f) => paintSprite(f)));
+  let now = skyNow();
+  let auroraUntil = 0;
+  let frame = 0;
+  const key = () => (Date.now() < auroraUntil ? 'window_aurora' : `window_${now.phase}${now.rain ? '_rain' : ''}`);
+  const draw = () => {
+    const k = key();
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, WIN.w, WIN.h);
+    ctx.drawImage(frames(k)[frame % 2], 0, 0);
+    room.dataset.sky = k.replace('window_', '');
+  };
+  const text = () => (Date.now() < auroraUntil ? 'Northern lights · just like home' : now.text);
+  hit.addEventListener('pointerenter', () => scene.tipAt(WIN.x + WIN.w / 2, WIN.y - 7, text()));
+  hit.addEventListener('pointerleave', scene.hideTip);
+  let taps = 0, lastTap = 0;
+  hit.addEventListener('click', (e) => {
+    e.stopPropagation(); // the wall isn't floor: don't send Tim walking
+    const t = performance.now();
+    taps = t - lastTap < 1500 ? taps + 1 : 1;
+    lastTap = t;
+    if (taps >= 5) { taps = 0; sky.aurora(); }
+  });
+  setInterval(() => { if (!document.hidden) { now = skyNow(); draw(); } }, 60_000);
+
+  const sky = {
+    tick(t) { frame = t; draw(); },
+    aurora() {
+      auroraUntil = Date.now() + 60_000;
+      frame = 0;
+      draw();
+      scene.hideTip();
+      const b = showBubble(room, scene, 'Northern lights! Just like back home in Alaska.', { x: 80, y: 4 });
+      b.classList.add('bubble--top');
+      setTimeout(() => b.remove(), 5000);
+      scene.tim.wave();
+      setTimeout(draw, 60_100);
+    },
+  };
+  draw();
+  return sky;
+}
+
+// ---------- keyboard play: arrows/WASD walk, E uses whatever Tim is next to ----------
+function setupKeyboard(scene) {
+  const { tim } = scene;
+  const held = []; // directions in press order; the latest one wins
+  let stepping = false;
+  const konami = createSequence(KONAMI);
+  const reachable = () => objectInReach(tim.cell(), OBJECTS);
+  const hint = () => {
+    const o = reachable();
+    if (o) scene.tipFor(o, `E · ${o.label}`); else scene.hideTip();
+  };
+  const run = async () => {
+    if (stepping) return;
+    stepping = true;
+    let facingWall = false;
+    try {
+      while (held.length && !scene.panels.isOpen()) {
+        const dir = held.at(-1);
+        const next = nextCell(tim.cell(), dir);
+        if (!tim.grid.walkable(next.col, next.row)) { tim.show(`tim_walk_${dir}`, 0); facingWall = true; break; }
+        if (!(await tim.walkTo(next, { settle: false }))) break;
+        hint();
+      }
+    } finally {
+      stepping = false;
+      if (!tim.walking && !facingWall) tim.show('tim_idle_down');
+    }
+  };
+  addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || scene.panels.isOpen()) return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+    if (!e.repeat && konami(e.key)) scene.sky.aurora();
+    const dir = KEY_DIRS[e.key];
+    if (dir) {
+      e.preventDefault(); // arrows would scroll the page
+      if (!held.includes(dir)) held.push(dir);
+      run();
+      return;
+    }
+    if ((e.key === 'e' || e.key === 'E') && !e.repeat) {
+      const o = reachable();
+      if (o) {
+        e.preventDefault();
+        scene.hideTip();
+        scene.activate(o.id, scene.buttons.find((b) => b.dataset.object === o.id));
+      } else {
+        scene.tipAt(tim.pos.x, tim.pos.y - 24, 'Walk up to something first');
+        setTimeout(scene.hideTip, 1400);
+      }
+    }
+  });
+  addEventListener('keyup', (e) => {
+    const i = held.indexOf(KEY_DIRS[e.key]);
+    if (i >= 0) held.splice(i, 1);
+  });
+  addEventListener('blur', () => { held.length = 0; });
+}
+
+// ---------- the pager goes off once per visit and invites a triage run ----------
+const PAGE_AFTER_MS = 15_000;
+function setupPager(room, scene) {
+  const btn = scene.buttons.find((b) => b.dataset.object === 'pager');
+  const canvas = btn.querySelector('canvas');
+  const frames = SPRITES.pager.frames.map((f) => paintSprite(f));
+  let session;
+  try { session = sessionStorage; } catch { session = undefined; }
+  let buzzing = false;
+  const draw = (i) => { const c = canvas.getContext('2d'); c.clearRect(0, 0, canvas.width, canvas.height); c.drawImage(frames[i], 0, 0); };
+  const pager = {
+    isBuzzing: () => buzzing,
+    stop() {
+      if (!buzzing) return;
+      buzzing = false;
+      btn.classList.remove('is-buzzing');
+      draw(0);
+      room.querySelector('.bubble--pager')?.remove();
+    },
+    buzz() {
+      if (buzzing || scene.panels.isOpen()) return false;
+      buzzing = true;
+      try { session?.setItem('tim-room-paged', '1'); } catch { /* ignore */ }
+      btn.classList.add('is-buzzing');
+      draw(1);
+      const go = doc.createElement('button');
+      go.type = 'button'; go.className = 'bubble-btn bubble-btn--ink'; go.textContent = 'Triage it';
+      go.addEventListener('click', () => { pager.stop(); scene.panels.open('incident', btn); });
+      const later = doc.createElement('button');
+      later.type = 'button'; later.className = 'bubble-btn'; later.textContent = 'Later';
+      later.addEventListener('click', () => pager.stop());
+      const phone = matchMedia(PHONE_QUERY).matches;
+      const b = showBubble(room, scene, "Tim's pager is going off. Help him triage the ticket?",
+        phone ? { x: 80, y: 4, actions: [go, later] } : { x: 100, y: 30, actions: [go, later] });
+      b.classList.add('bubble--pager');
+      if (phone) b.classList.add('bubble--top');
+      return true;
+    },
+    tick(t) { if (buzzing) draw(t % 2); },
+  };
+  let alreadyPaged = false;
+  try { alreadyPaged = session?.getItem('tim-room-paged') === '1'; } catch { /* ignore */ }
+  if (!alreadyPaged) {
+    const attempt = () => { if (document.hidden || !pager.buzz()) setTimeout(attempt, 5000); };
+    setTimeout(attempt, PAGE_AFTER_MS);
+  }
+  return pager;
 }
 
 function layout(room) {
@@ -457,8 +649,30 @@ export function init() {
     scene.onProgress = (found) => tray.render(found);
     scene.progress = createProgress(scene);
     setupHudMenu();
+    scene.sky = createWindow(room, scene);
+    scene.pager = setupPager(room, scene);
+    const pagerBtn = scene.buttons.find((b) => b.dataset.object === 'pager');
+    scene.extraPanels = {
+      incident: createIncidentPanel({ onContact: () => scene.panels.open('mailbox', pagerBtn, { replace: true }) }),
+    };
+    // The pager's Incident log panel gets a way into the triage mini-game.
+    scene.decoratePanel = (id, body) => {
+      if (id !== 'pager') return;
+      const box = doc.createElement('div');
+      box.className = 'inc-callout';
+      box.innerHTML = '<p><strong>See it work.</strong> Run a simulated ticket through my Claude triage skill.</p>';
+      const go = doc.createElement('button');
+      go.type = 'button'; go.className = 'bubble-btn bubble-btn--ink'; go.textContent = '▶ Triage a ticket';
+      go.addEventListener('click', () => scene.panels.open('incident', pagerBtn, { replace: true }));
+      box.append(go);
+      body.prepend(box);
+    };
+    setupKeyboard(scene);
     let pendingCelebration = false;
-    scene.onPanelOpened = (id) => { pendingCelebration = scene.progress.mark(id) || pendingCelebration; };
+    scene.onPanelOpened = (id) => {
+      if (id === 'pager' || id === 'incident') scene.pager.stop();
+      pendingCelebration = scene.progress.mark(id) || pendingCelebration;
+    };
     scene.onPanelClosed = () => {
       if (!pendingCelebration) return;
       pendingCelebration = false;
@@ -494,7 +708,7 @@ export function init() {
     // Welcome: Tim waves and says hi; the bubble goes away on the first interaction.
     const helloText = matchMedia(PHONE_QUERY).matches
       ? "Hey, I'm Tim — just a kid from Alaska. Tap around."
-      : "Hey, I'm Tim — just a kid from Alaska. Click around (or use Tab).";
+      : "Hey, I'm Tim — just a kid from Alaska. Walk with the arrow keys or WASD and press E to look at things, or just click around.";
     const hello = showBubble(room, scene, helloText,
       { x: tim.pos.x, y: tim.pos.y - 22 });
     hello.classList.add('bubble--hello');
@@ -511,6 +725,8 @@ export function init() {
     setInterval(() => {
       if (document.hidden || reducedMotion() || scene.panels.isOpen()) return;
       tick++;
+      scene.sky.tick(tick);
+      scene.pager.tick(tick);
       if (mug) { const m = mug.getContext('2d'); m.clearRect(0, 0, mug.width, mug.height); m.drawImage(steamFrames[tick % 2], 0, 0); }
       if (tim.walking) return;
       if (tim.pose === 'idle') tim.show('tim_idle_down', tick % 2);
