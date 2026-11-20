@@ -18,7 +18,14 @@ def check(name, ok, reason=""):
 
 
 def load_index():
+    """The game homepage."""
     p = ROOT / "index.html"
+    return p.read_text(encoding="utf-8") if p.exists() else ""
+
+
+def load_story():
+    """The full-text Field Manual page (story mode)."""
+    p = ROOT / "story" / "index.html"
     return p.read_text(encoding="utf-8") if p.exists() else ""
 
 
@@ -101,10 +108,15 @@ class HTMLIndex(HTMLParser):
                 self.metas[key] = a["content"]
 
 
-def parse_index():
+def parse_html(text):
     p = HTMLIndex()
-    p.feed(load_index())
+    p.feed(text)
     return p
+
+
+def parse_index():
+    """Parses the story page: every content test checks the Field Manual text."""
+    return parse_html(load_story())
 
 
 SKIP_DIRS = {".git", ".superpowers"}
@@ -311,7 +323,7 @@ def test_hero_content():
     hero = idx.scope_text.get("trailhead", "").lower()
     hero_links = idx.scope_links.get("trailhead", [])
     head_links = idx.scope_links.get("header", [])
-    resume = "assets/Tim_Muangkeo_Resume.pdf"
+    resume = "../assets/Tim_Muangkeo_Resume.pdf"
     problems = []
     if "just a kid from alaska" not in hero:
         problems.append("hero missing headline")
@@ -389,7 +401,7 @@ def test_no_hidden_without_js():
 
 
 FEATURE_TITLES = ["Production escalations", "Zero-loss data migrations",
-                  "AI-powered self-serve tooling", "Automation & mentoring"]
+                  "AI-powered triage & review", "Self-serve tooling & automation"]
 
 
 def test_features():
@@ -410,7 +422,7 @@ def test_features():
         problems.append(f"{len(cards)} .feature cards, want 4")
     if idx.scope_h3.get("features", []) != FEATURE_TITLES:
         problems.append(f"h3 texts {idx.scope_h3.get('features', [])}")
-    for phrase in ("95%", "zero data loss", "30%", "24 hours", "1\u20132 hours"):
+    for phrase in ("95%", "zero data loss", "Atlassian MCP", "24 hours", "1\u20132 hours"):
         if phrase not in text:
             problems.append(f"missing '{phrase}'")
     if len(lis) < 12:
@@ -449,7 +461,7 @@ def test_timeline_facts():
     if any(e["open"] for e in entries[1:]):
         problems.append("only the first entry should be open")
     links = idx.scope_links.get("log", [])
-    if not any(a.get("href") == "assets/Tim_Muangkeo_Resume.pdf" and "download" in a for a in links):
+    if not any(a.get("href") == "../assets/Tim_Muangkeo_Resume.pdf" and "download" in a for a in links):
         problems.append("no resume download link in #log")
     check("timeline_facts", not problems, "; ".join(problems))
 
@@ -485,22 +497,25 @@ def test_contact_links():
     hrefs = [a.get("href") for a in idx.scope_links.get("contact", [])]
     want = ["mailto:tim.muangkeo@gmail.com?subject=Let%27s%20talk%20%E2%80%94%20from%20your%20site",
             "https://www.linkedin.com/in/ttmuangkeo", "https://github.com/ttmuangkeo",
-            "assets/Tim_Muangkeo_Resume.pdf"]
+            "../assets/Tim_Muangkeo_Resume.pdf"]
     missing = [w for w in want if w not in hrefs]
     check("contact_links", not missing, f"missing {missing}")
 
 
 def test_meta_tags():
-    idx = parse_index()
-    m = idx.metas
-    problems = [f"missing {k}" for k in ("description", "og:title", "og:description") if not m.get(k)]
-    for k, v in (("og:image", "https://ttmuangkeo.github.io/assets/img/og.jpg"),
-                 ("og:url", "https://ttmuangkeo.github.io/"),
-                 ("twitter:card", "summary_large_image")):
-        if m.get(k) != v:
-            problems.append(f"{k}={m.get(k)!r}, want {v!r}")
-    if "assets/img/favicon.svg" not in idx.icons:
-        problems.append("no <link rel=icon> to assets/img/favicon.svg")
+    problems = []
+    pages = (("home", parse_html(load_index()), "https://ttmuangkeo.github.io/", "assets/img/favicon.svg"),
+             ("story", parse_index(), "https://ttmuangkeo.github.io/story/", "../assets/img/favicon.svg"))
+    for name, idx, url, icon in pages:
+        m = idx.metas
+        problems += [f"{name}: missing {k}" for k in ("description", "og:title", "og:description") if not m.get(k)]
+        for k, v in (("og:image", "https://ttmuangkeo.github.io/assets/img/og.jpg"),
+                     ("og:url", url),
+                     ("twitter:card", "summary_large_image")):
+            if m.get(k) != v:
+                problems.append(f"{name}: {k}={m.get(k)!r}, want {v!r}")
+        if icon not in idx.icons:
+            problems.append(f"{name}: no <link rel=icon> to {icon}")
     check("meta_tags", not problems, "; ".join(problems))
 
 
@@ -516,11 +531,12 @@ def test_404_exists():
     f = HTMLIndex()
     if ok:
         f.feed(p.read_text(encoding="utf-8"))
-    check("404_exists", ok and "/" in f.links, "404.html missing or has no link to /")
+    check("404_exists", ok and "/" in f.links and "/story/" in f.links,
+          "404.html missing, or lacks links to / and /story/")
 
 
 def test_route_years():
-    html = load_index()
+    html = load_story()
     m = re.search(r'<section id="route".*?</section>', html, re.S)
     sec = m.group(0) if m else ""
     want = {"uaa": "2012\u20132017", "mercutio": "2017", "penwizard": "2017\u20132018",
@@ -555,18 +571,18 @@ def test_inits_guarded():
 
 
 def test_worked_at_logos():
-    html = load_index()
+    html = load_story()
     m = re.search(r'<ul class="worked-at"[^>]*>(.*?)</ul>', html, re.S)
     problems = []
     if not m:
         problems.append("no ul.worked-at strip")
     else:
         strip = m.group(1)
-        for co, path in (("MoxiWorks", "assets/img/logos/moxiworks.svg"),
-                         ("GoodLeap", "assets/img/logos/goodleap.svg")):
+        for co, path in (("MoxiWorks", "../assets/img/logos/moxiworks.svg"),
+                         ("GoodLeap", "../assets/img/logos/goodleap.svg")):
             if not re.search(r'<img[^>]*src="' + re.escape(path) + r'"[^>]*alt="' + co + r'"', strip):
                 problems.append(f"{co} logo img with alt missing")
-            if not (ROOT / path).exists():
+            if not (ROOT / path.replace('../', '')).exists():
                 problems.append(f"{path} missing")
         if re.search(r"trusted by", html, re.I):
             problems.append('"Trusted by" wording implies endorsement')
@@ -576,7 +592,7 @@ def test_worked_at_logos():
 
 
 def test_route_logos():
-    html = load_index()
+    html = load_story()
     expected = {"moxi-support": "moxiworks", "goodleap": "goodleap",
                 "moxi-senior": "moxiworks", "moxi-swe": "moxiworks"}
     names = {"moxiworks": "MoxiWorks", "goodleap": "GoodLeap"}
@@ -584,11 +600,184 @@ def test_route_logos():
     for stop, logo in expected.items():
         m = re.search(r'data-stop="' + stop + r'">(.*?)</li>', html, re.S)
         block = m.group(1) if m else ""
-        pat = (r'<p class="stop-org[^"]*">\s*<img[^>]*src="assets/img/logos/' + logo
+        pat = (r'<p class="stop-org[^"]*">\s*<img[^>]*src="../assets/img/logos/' + logo
                + r'\.svg"[^>]*alt="' + names[logo] + r'"')
         if not re.search(pat, block):
             problems.append(f"{stop}: no {names[logo]} logo in stop-org")
     check("route_logos", not problems, "; ".join(problems))
+
+
+STORY_IDS = ("trailhead", "route", "features", "log", "basecamp", "offtrail", "contact")
+
+
+def test_story_page():
+    html = load_story()
+    idx = parse_html(html)
+    problems = []
+    if not html:
+        problems.append("story/index.html missing")
+    missing = [i for i in STORY_IDS if i not in idx.ids]
+    if missing:
+        problems.append(f"missing sections {missing}")
+    if re.search(r'(?:href|src)="assets/', html):
+        problems.append("relative assets/ paths (need ../assets/)")
+    if "/" not in idx.links:
+        problems.append("no link back to /")
+    check("story_page", not problems, "; ".join(problems))
+
+
+def test_root_hud_static():
+    html = load_index()
+    idx = parse_html(html)
+    hud = idx.scope_text.get("header", "")
+    links = idx.scope_links.get("header", [])
+    problems = []
+    for t in ("Tim Muangkeo", "Software Engineer"):
+        if t not in hud:
+            problems.append(f"HUD missing {t!r}")
+    if not any(l.get("href") == "assets/Tim_Muangkeo_Resume.pdf" and "download" in l for l in links):
+        problems.append("HUD missing resume download")
+    if not any(str(l.get("href", "")).startswith("mailto:tim.muangkeo@gmail.com") for l in links):
+        problems.append("HUD missing mailto")
+    if not any(l.get("href") == "/story/" for l in links):
+        problems.append("HUD missing /story/ link")
+    check("root_hud_static", not problems, "; ".join(problems))
+
+
+def test_root_fallback():
+    html = load_index()
+    m = re.search(r'<section class="fallback".*?</section>', html, re.S)
+    block = m.group(0) if m else ""
+    ok = "Just a kid from Alaska" in block and 'href="/story/"' in block
+    check("root_fallback", ok, "no .fallback section with intro and /story/ link")
+
+
+def test_hash_redirect():
+    html = load_index()
+    scripts = " ".join(re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html, re.S))
+    missing = [i for i in STORY_IDS if i not in scripts]
+    ok = scripts and not missing and "/story/" in scripts and "location" in scripts
+    check("hash_redirect", bool(ok), f"inline redirect missing ids {missing} or /story/")
+
+
+def test_room_js_guarded():
+    p = ROOT / "assets" / "game" / "room.js"
+    js = p.read_text(encoding="utf-8") if p.exists() else ""
+    i = js.find("export function init(")
+    js = js[i:] if i >= 0 else ""
+    problems = []
+    t, c, ready = js.find("try {"), js.find("} catch"), js.find("game-ready")
+    if min(t, c, ready) < 0:
+        problems.append("room.js needs try/catch around init and a game-ready class")
+    elif not (t < ready < c):
+        problems.append("game-ready must be added inside the try, after rendering")
+    check("room_js_guarded", not problems, "; ".join(problems))
+
+
+def test_panel_selectors_exist():
+    p = ROOT / "assets" / "game" / "panels.js"
+    js = p.read_text(encoding="utf-8") if p.exists() else ""
+    story = load_story()
+    sels = re.findall(r"'([#\\[][^']*)'", js)
+    problems = [] if sels else ["no selectors in panels.js"]
+    for sel in sels:
+        for tok in re.findall(r"#([a-z-]+)|\.([a-z-]+)|data-stop=\"([a-z-]+)\"", sel):
+            name = next(t for t in tok if t)
+            if not re.search(r'(id|class)="[^"]*\b' + re.escape(name) + r'\b|data-stop="' + re.escape(name) + '"', story):
+                problems.append(f"{sel}: {name} not in story page")
+    check("panel_selectors_exist", not problems, "; ".join(problems[:6]))
+
+
+def test_panels_no_new_facts():
+    p = ROOT / "assets" / "game" / "panels.js"
+    js = p.read_text(encoding="utf-8") if p.exists() else ""
+    story = load_story()
+    figures = set(re.findall(r"\d+%|\b(?:19|20)\d\d\b", js))
+    new = sorted(f for f in figures if f not in story)
+    bad = bool(PHONE.search(js)) or "Goodleap" in js or not js
+    check("panels_no_new_facts", not new and not bad, f"new figures {new}; phone/misspelling/missing={bad}")
+
+
+def test_root_counter():
+    html = load_index()
+    m = re.search(r'class="hud-found"[^>]*>(.*?)</p>', html, re.S)
+    text = re.sub(r"<[^>]+>", "", m.group(1)) if m else ""
+    check("root_counter", "Found" in text and "/8" in text, "HUD lacks a Found N/8 counter")
+
+
+def test_panel_keeps_hud_usable():
+    js = (ROOT / "assets" / "game" / "room.js").read_text(encoding="utf-8")
+    problems = []
+    if "showModal(" in js:
+        problems.append("showModal() makes the HUD inert; open panels non-modally")
+    for needle in ("inert", "Escape", "Tab"):
+        if needle not in js:
+            problems.append(f"room.js lacks {needle} handling for the non-modal panel")
+    check("panel_keeps_hud_usable", not problems, "; ".join(problems))
+
+
+def test_room_stacking_isolated():
+    css = (ROOT / "assets" / "game" / "room.css").read_text(encoding="utf-8")
+    m = re.search(r"#room\s*\{[^}]*\}", css)
+    ok = bool(m) and "isolation: isolate" in m.group(0)
+    check("room_stacking_isolated", ok, "#room needs isolation: isolate so sprites never cover panels")
+
+
+def test_tray_markup():
+    js = (ROOT / "assets" / "game" / "room.js").read_text(encoding="utf-8")
+    css = (ROOT / "assets" / "game" / "room.css").read_text(encoding="utf-8")
+    problems = []
+    if "tray-btn" not in js:
+        problems.append("room.js does not create .tray-btn buttons")
+    phone = "".join(re.findall(r"@media \(max-width: 640px\)\s*\{(.*?)\n\}", css, re.S))
+    if ".tray-btn" not in phone or not re.search(r"min-height:\s*(4[4-9]|[5-9]\d|\d{3})px", phone):
+        problems.append("phone media block lacks .tray-btn with min-height >= 44px")
+    if "grid-template-columns: repeat(4" not in phone:
+        problems.append("tray is not a 4-column grid on phones")
+    if "hud-menu" not in js or "aria-expanded" not in js:
+        problems.append("HUD menu toggle with aria-expanded missing")
+    check("tray_markup", not problems, "; ".join(problems))
+
+
+GAME_FILES = ["room.js", "sprites.js", "objects.js", "grid.js", "state.js", "panels.js", "room.css"]
+
+
+def test_game_budget():
+    sizes = {f: (ROOT / "assets" / "game" / f).stat().st_size for f in GAME_FILES if (ROOT / "assets" / "game" / f).exists()}
+    total = sum(sizes.values()) + (ROOT / "index.html").stat().st_size
+    problems = []
+    if total > 300_000:
+        problems.append(f"game files total {total} bytes > 300 KB")
+    for f in ("room.js", "sprites.js"):
+        if sizes.get(f, 0) > 60_000:
+            problems.append(f"{f} is {sizes[f]} bytes > 60 KB")
+    check("game_budget", not problems and len(sizes) == len(GAME_FILES), "; ".join(problems) or f"missing files: {sizes}")
+
+
+def test_game_life():
+    js = (ROOT / "assets" / "game" / "room.js").read_text(encoding="utf-8")
+    css = (ROOT / "assets" / "game" / "room.css").read_text(encoding="utf-8")
+    problems = []
+    if "Hey, I\u2019m Tim" not in js and "Hey, I'm Tim" not in js:
+        problems.append("no welcome bubble copy")
+    if "'tim_wave'" not in js or "wave" not in js.split("export function init(")[-1]:
+        problems.append("Tim does not wave on load")
+    if "document.hidden" not in js:
+        problems.append("idle timers do not pause when the tab is hidden")
+    if ".flash" not in css or "flash" not in js:
+        problems.append("no camera flash overlay")
+    if "steam" not in js:
+        problems.append("no mug steam idle")
+    check("game_life", not problems, "; ".join(problems))
+
+
+def test_canonical_tags():
+    problems = []
+    for name, html, url in (("home", load_index(), "https://ttmuangkeo.github.io/"),
+                            ("story", load_story(), "https://ttmuangkeo.github.io/story/")):
+        if f'<link rel="canonical" href="{url}">' not in html:
+            problems.append(f"{name} lacks canonical {url}")
+    check("canonical_tags", not problems, "; ".join(problems))
 
 
 def main():

@@ -74,6 +74,7 @@ a { color: inherit; }
 .nav-home { font-weight: 600; white-space: nowrap; }
 .nav-home span { font-weight: 400; color: var(--muted); }
 .nav-links { display: none; list-style: none; margin: 0 auto 0 0; padding: 0; gap: var(--space-4); }
+.nav-back { white-space: nowrap; margin-left: auto; margin-right: var(--space-4); }
 .nav-resume { font-weight: 600; white-space: nowrap; border-bottom: 1.5px solid var(--ink); }
 @media (min-width: 760px) { .nav-links { display: flex; } }
 
@@ -135,6 +136,8 @@ section { padding-block: var(--space-6); scroll-margin-top: 4rem; }
 }
 .hero p { margin: 0; }
 .hero-role { max-width: 30rem; font-size: var(--fs-base); line-height: 1.5; color: var(--muted); }
+.hero-bio { max-width: 30rem; font-size: var(--fs-sm); line-height: 1.55; color: var(--muted); }
+.hero-bio a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 2px; }
 .hero-meta, .hero-coords {
   font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: 0.06em;
   text-transform: uppercase; color: var(--muted);
