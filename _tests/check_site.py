@@ -401,7 +401,7 @@ def test_no_hidden_without_js():
 
 
 FEATURE_TITLES = ["Production escalations", "Zero-loss data migrations",
-                  "AI-powered self-serve tooling", "Automation & mentoring"]
+                  "AI-powered triage & review", "Self-serve tooling & automation"]
 
 
 def test_features():
@@ -422,7 +422,7 @@ def test_features():
         problems.append(f"{len(cards)} .feature cards, want 4")
     if idx.scope_h3.get("features", []) != FEATURE_TITLES:
         problems.append(f"h3 texts {idx.scope_h3.get('features', [])}")
-    for phrase in ("95%", "zero data loss", "30%", "24 hours", "1\u20132 hours"):
+    for phrase in ("95%", "zero data loss", "Atlassian MCP", "24 hours", "1\u20132 hours"):
         if phrase not in text:
             problems.append(f"missing '{phrase}'")
     if len(lis) < 12:

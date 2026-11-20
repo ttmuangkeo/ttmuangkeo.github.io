@@ -6,7 +6,7 @@ export const PANELS = {
   pennant: {
     title: 'Where it started',
     story: '#trailhead',
-    pick: ['#trailhead h1', '#trailhead .hero-role', '[data-stop="uaa"] .stop-caption', '[data-stop="uaa"] .stop-photo', '[data-stop="ga"] .stop-caption'],
+    pick: ['#trailhead h1', '#trailhead .hero-role', '#trailhead .hero-bio', '[data-stop="uaa"] .stop-caption', '[data-stop="uaa"] .stop-photo', '[data-stop="ga"] .stop-caption'],
   },
   map: {
     title: 'The route',
