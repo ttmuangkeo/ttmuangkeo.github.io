@@ -739,7 +739,8 @@ def test_tray_markup():
     check("tray_markup", not problems, "; ".join(problems))
 
 
-GAME_FILES = ["room.js", "sprites.js", "objects.js", "grid.js", "state.js", "panels.js", "room.css"]
+GAME_FILES = ["room.js", "sprites.js", "objects.js", "grid.js", "state.js", "panels.js", "room.css",
+              "controls.js", "sky.js", "incident.js"]
 
 
 def test_game_budget():

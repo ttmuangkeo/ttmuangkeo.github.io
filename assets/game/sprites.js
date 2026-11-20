@@ -20,6 +20,9 @@ export const PALETTE = {
   e: '#6fd38a', E: '#3fa862', // screen
   u: '#9fc6d6', U: '#e9f2f5', i: '#f4f6f7', v: '#5f6f7a', // sky, cloud, snow, mountain
   y: '#f2d34b', a: '#1f4e8a', x: '#e0483a', // gold, Alaska blue, alert red
+  d: '#1b2340', D: '#3a4a78', // night sky, dusk sky
+  j: '#f2a65a', J: '#e07a8a', Z: '#cfe0ea', // sunset orange, dawn/dusk pink, dawn haze
+  q: '#7fe0b0', Q: '#9b7fd6', z: '#3b4a5c', // aurora green, aurora violet, night mountain
 };
 
 // ---------- tiny drawing helpers (pure) ----------
@@ -58,6 +61,47 @@ function drawRoom() {
   // door
   box(g, 145, 10, 15, 30, 'b'); rect(g, 147, 12, 11, 12, 'h'); rect(g, 147, 26, 11, 12, 'h');
   px(g, 156, 26, 'y');
+  return frame(g);
+}
+
+// ---------- window (30x22, laid over the backdrop's window at 108,8) ----------
+// phase: dawn | day | dusk | night | aurora. f (0/1) twinkles stars, ripples the aurora, moves rain.
+export const SKY_PHASES = ['dawn', 'day', 'dusk', 'night', 'aurora'];
+function drawWindow(phase, f = 0, rain = false) {
+  const g = grid(30, 22);
+  const dark = phase === 'night' || phase === 'aurora';
+  const sky = rain
+    ? { dawn: 'Z', day: 'l', dusk: 'D', night: 'd', aurora: 'd' }[phase]
+    : { dawn: 'Z', day: 'u', dusk: 'D', night: 'd', aurora: 'd' }[phase];
+  box(g, 0, 0, 30, 22, sky);
+  if (phase === 'day') rect(g, 2, 2, 26, 6, rain ? 'm' : 'U');            // cloud bank
+  if (phase === 'dawn') { rect(g, 1, 6, 28, 4, 'J'); if (!rain) rect(g, 21, 6, 2, 2, 'y'); }
+  if (phase === 'dusk') { rect(g, 1, 5, 28, 3, 'j'); rect(g, 1, 8, 28, 2, 'J'); }
+  if (dark && !rain) {
+    [[3, 2], [8, 4], [12, 1], [17, 3], [20, 7], [27, 6], [5, 7], [11, 6]]
+      .forEach(([x, y], i) => { if ((i + f) % 3) px(g, x, y, 'i'); });
+    rect(g, 24, 2, 2, 2, 'U');                                            // moon
+  }
+  if (phase === 'aurora') {                                               // northern lights curtain
+    for (let x = 1; x < 29; x++) {
+      const y = 2 + Math.round(1.5 + 1.5 * Math.sin((x + f * 3) / 3));
+      px(g, x, y, 'q'); px(g, x, y + 1, (x + f) % 4 ? 'q' : 'Q'); if (x % 2) px(g, x, y + 2, 'Q');
+    }
+  }
+  for (let i = 0; i < 9; i++) rect(g, 4 + i, 12 - i, 18 - 2 * i, 1, i >= 6 ? (dark ? 'l' : 'i') : (dark ? 'z' : 'v')); // mountain
+  rect(g, 1, 14, 28, 7, dark ? 'C' : 'P');                               // ground
+  rect(g, 4, 13, 14, 4, 'c'); rect(g, 6, 11, 9, 2, 'm');                 // truck + rooftop tent
+  px(g, 6, 17, 'k'); px(g, 15, 17, 'k'); px(g, 17, 14, 'y');             // wheels + headlight
+  if (dark) { px(g, 10, 11, 'y'); px(g, 18, 14, 'y'); }                  // tent lantern, headlight glow
+  if (rain && !dark) for (let x = 2; x < 28; x += 3) {                   // rain streaks
+    const y = 1 + ((x * 5 + f * 4) % 18);
+    px(g, x, y, 'U'); px(g, x, y + 1, 'U');
+  }
+  if (rain && dark) for (let x = 2; x < 28; x += 3) {
+    const y = 1 + ((x * 5 + f * 4) % 18);
+    px(g, x, y, 'v'); px(g, x, y + 1, 'v');
+  }
+  rect(g, 14, 1, 1, 20, 'k'); rect(g, 1, 10, 28, 1, 'k');                // window cross bars
   return frame(g);
 }
 
@@ -228,6 +272,11 @@ export const SPRITES = {
   icon_camera: icon((g) => fit(CAMERA, g, 0, 2)),
   icon_mailbox: icon((g) => { box(g, 1, 3, 14, 8, 'o', 'R'); rect(g, 2, 4, 12, 1, 'r'); rect(g, 12, 1, 2, 5, 'y'); rect(g, 7, 11, 2, 5, 'k'); }),
 };
+// window_<phase> and window_<phase>_rain (no rain under the aurora), two frames each
+for (const phase of SKY_PHASES) {
+  SPRITES[`window_${phase}`] = sheet(30, 22, [drawWindow(phase, 0), drawWindow(phase, 1)]);
+  if (phase !== 'aurora') SPRITES[`window_${phase}_rain`] = sheet(30, 22, [drawWindow(phase, 0, true), drawWindow(phase, 1, true)]);
+}
 
 export function validateSprite(s) {
   const problems = [];
