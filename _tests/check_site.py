@@ -702,7 +702,11 @@ def test_root_counter():
     html = load_index()
     m = re.search(r'class="hud-found"[^>]*>(.*?)</p>', html, re.S)
     text = re.sub(r"<[^>]+>", "", m.group(1)) if m else ""
-    check("root_counter", "Found" in text and "/8" in text, "HUD lacks a Found N/8 counter")
+    objects = (ROOT / "assets" / "game" / "objects.js").read_text(encoding="utf-8")
+    total = len(re.findall(r"\{ id: '", objects))
+    m2 = re.search(r"Found \d+/(\d+)", text)
+    check("root_counter", bool(m2) and int(m2.group(1)) == total,
+          f"HUD needs a Found N/{total} counter matching objects.js, got {text.strip()!r}")
 
 
 def test_panel_keeps_hud_usable():
@@ -732,15 +736,15 @@ def test_tray_markup():
     phone = "".join(re.findall(r"@media \(max-width: 640px\)\s*\{(.*?)\n\}", css, re.S))
     if ".tray-btn" not in phone or not re.search(r"min-height:\s*(4[4-9]|[5-9]\d|\d{3})px", phone):
         problems.append("phone media block lacks .tray-btn with min-height >= 44px")
-    if "grid-template-columns: repeat(4" not in phone:
-        problems.append("tray is not a 4-column grid on phones")
+    if "grid-template-columns: repeat(3" not in phone:
+        problems.append("tray is not a 3-column grid on phones")
     if "hud-menu" not in js or "aria-expanded" not in js:
         problems.append("HUD menu toggle with aria-expanded missing")
     check("tray_markup", not problems, "; ".join(problems))
 
 
 GAME_FILES = ["room.js", "sprites.js", "objects.js", "grid.js", "state.js", "panels.js", "room.css",
-              "controls.js", "sky.js", "incident.js"]
+              "controls.js", "sky.js", "incident.js", "migration.js", "dom.js"]
 
 
 def test_game_budget():

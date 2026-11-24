@@ -1,4 +1,5 @@
-// Room layout in native pixels (160x100). Furniture is decor; OBJECTS are the 8 interactive things.
+// Room layout in native pixels (160x100). Furniture is decor; OBJECTS are the interactive things
+// (the found counter, tray and "found everything" moment all count from this list).
 // useSpot is the floor cell mini Tim walks to; face is the direction he faces while using it.
 
 export const ROOM = {
@@ -11,6 +12,7 @@ export const ROOM = {
     ...[11, 12, 13, 14, 15, 16, 17].flatMap((c) => [[c, 5], [c, 6], [c, 7]]), // desk
     [1, 9], [2, 9], [3, 9], [1, 10], [2, 10], [3, 10],            // camera bag
     [19, 8],                                                      // mailbox post
+    [17, 10], [18, 10], [17, 11], [18, 11],                       // server rack
   ],
 };
 
@@ -36,6 +38,8 @@ export const OBJECTS = [
     ariaLabel: 'Truck keys: sitrepp.io, the trip planner Tim is building', useSpot: { col: 18, row: 5 }, face: 'up', anim: 'jingle' },
   { id: 'camera', label: 'Camera bag', sprite: 'camera', x: 10, y: 72,
     ariaLabel: 'Camera bag: Summit Peak Venture and photography', useSpot: { col: 4, row: 10 }, face: 'left', anim: 'photo' },
+  { id: 'rack', label: 'Server rack', sprite: 'rack', x: 136, y: 70,
+    ariaLabel: 'Server rack: the EWS to Microsoft Graph cutover', useSpot: { col: 16, row: 11 }, face: 'right', anim: 'blink' },
   { id: 'mailbox', label: 'Mailbox', sprite: 'mailbox', x: 148, y: 44,
     ariaLabel: 'Mailbox: get in touch with Tim', useSpot: { col: 18, row: 9 }, face: 'up', anim: 'open' },
 ];
