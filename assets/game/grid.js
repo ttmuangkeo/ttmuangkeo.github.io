@@ -42,8 +42,8 @@ export function walkSpeed(pathLength) { return Math.max(BASE_SPEED, pathLength /
 // Each walk gets an id; a walk loop stops as soon as a newer id exists (re-targeting).
 export function nextWalkId(current) { return current + 1; }
 
-export const NATIVE_W = 160;
-export const NATIVE_H = 100;
+export const NATIVE_W = 240;
+export const NATIVE_H = 135;
 
 // Desktop: the largest whole-number scale that fits under the HUD (crisp pixels).
 // Phones: fill the width, accepting slightly uneven pixels.

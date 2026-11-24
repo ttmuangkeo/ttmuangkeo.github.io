@@ -1,7 +1,8 @@
 // Unit tests for the pixel-room game logic. Run: node --test _tests/
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PALETTE, SPRITES, validateSprite } from '../assets/game/sprites.js';
+import { PALETTE, SPRITES, WINDOW, validateSprite } from '../assets/game/sprites.js';
+import { NATIVE_W, NATIVE_H } from '../assets/game/grid.js';
 
 const OBJECT_IDS = ['pennant', 'map', 'laptop', 'pager', 'logbook', 'keys', 'camera', 'rack', 'mailbox'];
 const GAME_PANELS = ['rack']; // objects whose panel is a mini-game, not story content
@@ -28,9 +29,15 @@ test('required sprites exist', () => {
   for (const key of required) assert.ok(SPRITES[key], `missing sprite ${key}`);
 });
 
-test('room is 160x100', () => {
-  assert.equal(SPRITES.room.w, 160);
-  assert.equal(SPRITES.room.h, 100);
+test('room is 240x135 and matches the native size', () => {
+  assert.equal(SPRITES.room.w, 240);
+  assert.equal(SPRITES.room.h, 135);
+  assert.equal(NATIVE_W, 240);
+  assert.equal(NATIVE_H, 135);
+});
+
+test('the window fits inside the room', () => {
+  assert.ok(WINDOW.x >= 0 && WINDOW.y >= 0 && WINDOW.x + WINDOW.w <= NATIVE_W && WINDOW.y + WINDOW.h <= 72, JSON.stringify(WINDOW));
 });
 
 test('tim frames share one size and have the right counts', () => {
@@ -65,11 +72,11 @@ test('OBJECTS has the 9 ids in order', () => {
   assert.deepEqual(OBJECTS.map((o) => o.id), OBJECT_IDS);
 });
 
-test("every object's sprite exists and lies inside 160x100", () => {
+test("every object's sprite exists and lies inside the room", () => {
   for (const o of OBJECTS) {
     const s = SPRITES[o.sprite];
     assert.ok(s, `${o.id}: sprite ${o.sprite}`);
-    assert.ok(o.x >= 0 && o.y >= 0 && o.x + s.w <= 160 && o.y + s.h <= 100, `${o.id} out of bounds`);
+    assert.ok(o.x >= 0 && o.y >= 0 && o.x + s.w <= NATIVE_W && o.y + s.h <= NATIVE_H, `${o.id} out of bounds`);
     assert.ok(o.label && o.ariaLabel, `${o.id} needs label and ariaLabel`);
   }
 });
@@ -85,13 +92,14 @@ test('useSpots are walkable floor cells', () => {
 });
 
 test('fitScale on desktop is the largest whole number that fits', () => {
-  assert.equal(fitScale(1280, 800, 48, false), 7);
+  assert.equal(fitScale(1280, 800, 48, false), 5);
+  assert.equal(fitScale(1280, 720, 64, false), 4);
   assert.equal(fitScale(300, 200, 48, false), 1);
   assert.ok(Number.isInteger(fitScale(1920, 1080, 52, false)));
 });
 
 test('fitScale on phones fits the width', () => {
-  assert.equal(fitScale(375, 812, 48, true), 375 / 160);
+  assert.equal(fitScale(375, 812, 48, true), 375 / 240);
 });
 
 // ---------- Task 4: walk grid and pathfinding ----------
@@ -256,7 +264,8 @@ test('skyNow reads Seattle time and rain is stable within an hour', () => {
 
 test('every window sky has a sprite, with rain variants except the aurora', () => {
   for (const p of SKY_PHASES) {
-    assert.equal(SPRITES[`window_${p}`]?.w, 30, p);
+    assert.equal(SPRITES[`window_${p}`]?.w, WINDOW.w, p);
+    assert.equal(SPRITES[`window_${p}`].h, WINDOW.h, p);
     assert.equal(SPRITES[`window_${p}`].frames.length, 2, p);
     assert.equal(Boolean(SPRITES[`window_${p}_rain`]), p !== 'aurora', `${p} rain`);
   }

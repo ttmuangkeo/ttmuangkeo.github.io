@@ -56,7 +56,7 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
 #room {
   --s: 4;
   position: relative; isolation: isolate; /* sprite z-indexes stay inside the room */
-  width: calc(160px * var(--s)); height: calc(100px * var(--s));
+  width: calc(240px * var(--s)); height: calc(135px * var(--s));
   background: var(--night-2); box-shadow: 0 0 0 4px var(--night-2), 0 12px 0 4px rgba(0, 0, 0, 0.25);
   overflow: hidden;
 }

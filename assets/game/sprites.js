@@ -23,6 +23,19 @@ export const PALETTE = {
   d: '#1b2340', D: '#3a4a78', // night sky, dusk sky
   j: '#f2a65a', J: '#e07a8a', Z: '#cfe0ea', // sunset orange, dawn/dusk pink, dawn haze
   q: '#7fe0b0', Q: '#9b7fd6', z: '#3b4a5c', // aurora green, aurora violet, night mountain
+  // ---- daylight office ----
+  1: '#e9e5dc', 2: '#dcd7cc', A: '#f3f0ea',   // off-white wall, its shade, its highlight
+  3: '#9db3a3', 4: '#8aa291',                 // sage accent wall + slats
+  5: '#c9c3b6',                               // trim
+  6: '#d2b48a', 7: '#c3a378', 0: '#b99a70',   // oak floor, plank lines, floor shadow
+  8: '#2b2f33', 9: '#f4f2ee',                 // matte black hardware, white desk top
+  L: '#4f8f5a', M: '#3a6e44',                 // plant, plant shade
+  O: '#d97a4a', T: '#b9603a',                 // terracotta sofa + shade
+  V: '#e8dcc6', X: '#d9c8a8',                 // cream rug + edge
+  Y: '#ffffff',
+  '[': '#9fd0ec', ']': '#b8ddf1', '{': '#d4ebf6', // Seattle day sky bands
+  '}': '#6fa8c8', '(': '#7d93a6', ')': '#a9bccb', // Elliott Bay, daytime towers, Rainier
+  '<': '#151b2b', '>': '#1a2540',               // night towers, night water
 };
 
 // ---------- tiny drawing helpers (pure) ----------
@@ -38,70 +51,88 @@ function box(g, x, y, w, h, fill, edge = 'k') { rect(g, x, y, w, h, edge); rect(
 function mirror(rows) { return rows.map((r) => [...r].reverse().join('')); }
 function sheet(w, h, frames) { return { w, h, frames }; }
 
-// ---------- room backdrop 160x100 ----------
+// ---------- room backdrop 240x135: a bright Seattle office ----------
+export const FLOOR_Y = 72;
+// The window opening in the backdrop; the live sky canvas is laid exactly over it.
+export const WINDOW = { x: 138, y: 8, w: 66, h: 46 };
+
 function drawRoom() {
-  const g = grid(160, 100);
-  rect(g, 0, 0, 160, 40, 'w');                                   // wall
-  for (let x = 0; x < 160; x += 8) rect(g, x, 0, 1, 40, 'W');    // plank seams
-  rect(g, 0, 0, 160, 2, 'k');                                    // ceiling trim
-  rect(g, 0, 40, 160, 60, 'f');                                  // floor
-  for (let y = 46; y < 100; y += 6) rect(g, 0, y, 160, 1, 'F');  // board lines
-  for (let y = 40, row = 0; y < 100; y += 6, row++) {            // staggered seams
-    for (let x = (row % 2) * 20; x < 160; x += 40) rect(g, x, y, 1, 6, 'F');
+  const g = grid(240, 135);
+  rect(g, 0, 0, 240, FLOOR_Y, '1');                                   // off-white wall
+  rect(g, 0, 0, 66, FLOOR_Y, '3');                                    // sage slat accent wall
+  for (let x = 3; x < 66; x += 5) rect(g, x, 4, 1, FLOOR_Y - 7, '4');
+  rect(g, 66, 3, 1, FLOOR_Y - 3, '2');                                // accent wall edge
+  rect(g, 67, 4, 1, FLOOR_Y - 7, 'A');
+  rect(g, 0, 0, 240, 3, '5'); rect(g, 0, 3, 240, 1, '2');             // ceiling trim + shadow line
+  // light oak floor: wide planks with staggered seams, darker where it meets the wall
+  rect(g, 0, FLOOR_Y, 240, 135 - FLOOR_Y, '6');
+  rect(g, 0, FLOOR_Y, 240, 2, '7');
+  for (let y = FLOOR_Y + 8, row = 0; y < 135; y += 8, row++) {
+    rect(g, 0, y, 240, 1, '7');
+    for (let x = (row * 37) % 64; x < 240; x += 64) rect(g, x, y - 7, 1, 7, '7');
   }
-  rect(g, 0, 38, 160, 3, 'k');                                   // baseboard
-  // window (rig parked outside)
-  box(g, 108, 8, 30, 22, 'u');
-  rect(g, 110, 10, 26, 6, 'U');
-  for (let i = 0; i < 9; i++) rect(g, 112 + i, 20 - i, 18 - 2 * i, 1, i < 3 ? 'i' : 'v'); // mountain
-  rect(g, 109, 22, 28, 7, 'P');                                  // ground outside
-  rect(g, 112, 21, 14, 4, 'c'); rect(g, 114, 19, 9, 2, 'm');     // truck + rooftop tent
-  px(g, 114, 25, 'k'); px(g, 123, 25, 'k'); px(g, 125, 22, 'y'); // wheels + light
-  rect(g, 122, 9, 1, 20, 'k'); rect(g, 109, 18, 28, 1, 'k');      // window cross bars
-  // door
-  box(g, 145, 10, 15, 30, 'b'); rect(g, 147, 12, 11, 12, 'h'); rect(g, 147, 26, 11, 12, 'h');
-  px(g, 156, 26, 'y');
+  rect(g, 0, FLOOR_Y - 4, 240, 3, '9'); rect(g, 0, FLOOR_Y - 1, 240, 1, '5'); // white baseboard
+  // window: black frame, white sill
+  const { x, y, w, h } = WINDOW;
+  box(g, x - 2, y - 2, w + 4, h + 4, '[', '8');
+  rect(g, x - 4, y + h + 2, w + 8, 2, '9'); rect(g, x - 4, y + h + 4, w + 8, 1, '5');
   return frame(g);
 }
 
-// ---------- window (30x22, laid over the backdrop's window at 108,8) ----------
+// ---------- window (WINDOW.w x WINDOW.h): Seattle, the Space Needle and Rainier ----------
 // phase: dawn | day | dusk | night | aurora. f (0/1) twinkles stars, ripples the aurora, moves rain.
 export const SKY_PHASES = ['dawn', 'day', 'dusk', 'night', 'aurora'];
+const TOWERS = [[0, 6, 13], [6, 5, 20], [11, 6, 11], [24, 6, 17], [30, 5, 24], [35, 6, 12], [47, 5, 8], [52, 6, 5], [58, 4, 7], [62, 4, 4]];
 function drawWindow(phase, f = 0, rain = false) {
-  const g = grid(30, 22);
+  const { w: W, h: H } = WINDOW;
+  const g = grid(W, H);
   const dark = phase === 'night' || phase === 'aurora';
-  const sky = rain
-    ? { dawn: 'Z', day: 'l', dusk: 'D', night: 'd', aurora: 'd' }[phase]
-    : { dawn: 'Z', day: 'u', dusk: 'D', night: 'd', aurora: 'd' }[phase];
-  box(g, 0, 0, 30, 22, sky);
-  if (phase === 'day') rect(g, 2, 2, 26, 6, rain ? 'm' : 'U');            // cloud bank
-  if (phase === 'dawn') { rect(g, 1, 6, 28, 4, 'J'); if (!rain) rect(g, 21, 6, 2, 2, 'y'); }
-  if (phase === 'dusk') { rect(g, 1, 5, 28, 3, 'j'); rect(g, 1, 8, 28, 2, 'J'); }
+  const WATER = H - 7;
+  const bands = rain
+    ? { dawn: ['l', 'Z', 'Z'], day: ['m', 'l', 'l'], dusk: ['D', 'D', 'J'], night: ['d', 'd', 'd'], aurora: ['d', 'd', 'D'] }[phase]
+    : { dawn: ['Z', 'J', 'j'], day: ['[', ']', '{'], dusk: ['D', 'J', 'j'], night: ['d', 'd', 'D'], aurora: ['d', 'd', 'D'] }[phase];
+  rect(g, 0, 0, W, 12, bands[0]); rect(g, 0, 12, W, 12, bands[1]); rect(g, 0, 24, W, WATER - 24, bands[2]);
+  if (phase === 'day' && !rain) { rect(g, 6, 5, 14, 2, 'U'); rect(g, 9, 4, 7, 1, 'U'); rect(g, 40, 8, 10, 2, 'U'); }
+  if (phase === 'dawn' && !rain) rect(g, 52, 20, 3, 3, 'y');
   if (dark && !rain) {
-    [[3, 2], [8, 4], [12, 1], [17, 3], [20, 7], [27, 6], [5, 7], [11, 6]]
-      .forEach(([x, y], i) => { if ((i + f) % 3) px(g, x, y, 'i'); });
-    rect(g, 24, 2, 2, 2, 'U');                                            // moon
+    [[3, 2], [9, 6], [14, 2], [27, 4], [33, 9], [40, 3], [49, 7], [56, 2], [62, 5], [23, 10], [36, 14]]
+      .forEach(([sx, sy], i) => { if ((i + f) % 3) px(g, sx, sy, 'i'); });
+    rect(g, 56, 3, 3, 3, 'U'); px(g, 56, 3, bands[0]);                     // moon
   }
-  if (phase === 'aurora') {                                               // northern lights curtain
-    for (let x = 1; x < 29; x++) {
-      const y = 2 + Math.round(1.5 + 1.5 * Math.sin((x + f * 3) / 3));
-      px(g, x, y, 'q'); px(g, x, y + 1, (x + f) % 4 ? 'q' : 'Q'); if (x % 2) px(g, x, y + 2, 'Q');
+  if (phase === 'aurora') {                                                 // northern lights curtain
+    for (let ax = 0; ax < W; ax++) {
+      const ay = 3 + Math.round(2 + 2 * Math.sin((ax + f * 3) / 4));
+      px(g, ax, ay, 'q'); px(g, ax, ay + 1, (ax + f) % 4 ? 'q' : 'Q'); px(g, ax, ay + 2, 'q'); if (ax % 2) px(g, ax, ay + 3, 'Q');
     }
   }
-  for (let i = 0; i < 9; i++) rect(g, 4 + i, 12 - i, 18 - 2 * i, 1, i >= 6 ? (dark ? 'l' : 'i') : (dark ? 'z' : 'v')); // mountain
-  rect(g, 1, 14, 28, 7, dark ? 'C' : 'P');                               // ground
-  rect(g, 4, 13, 14, 4, 'c'); rect(g, 6, 11, 9, 2, 'm');                 // truck + rooftop tent
-  px(g, 6, 17, 'k'); px(g, 15, 17, 'k'); px(g, 17, 14, 'y');             // wheels + headlight
-  if (dark) { px(g, 10, 11, 'y'); px(g, 18, 14, 'y'); }                  // tent lantern, headlight glow
-  if (rain && !dark) for (let x = 2; x < 28; x += 3) {                   // rain streaks
-    const y = 1 + ((x * 5 + f * 4) % 18);
-    px(g, x, y, 'U'); px(g, x, y + 1, 'U');
+  // Mount Rainier, snow-capped, behind the towers
+  for (let r = 0; r < 22; r++) {
+    const half = 2 + Math.round(r * 1.7);
+    rect(g, 44 - half, 15 + r, half * 2, 1, r < 6 ? (dark ? 'l' : 'i') : (dark ? 'z' : ')'));
   }
-  if (rain && dark) for (let x = 2; x < 28; x += 3) {
-    const y = 1 + ((x * 5 + f * 4) % 18);
-    px(g, x, y, 'v'); px(g, x, y + 1, 'v');
+  // downtown towers with lit windows
+  TOWERS.forEach(([tx, tw, th], i) => {
+    const top = WATER - th;
+    rect(g, tx, top, tw, th, dark ? '<' : '(');
+    rect(g, tx, top, 1, th, dark ? 'C' : ')');
+    for (let wy = top + 2; wy < WATER - 1; wy += 3) for (let wx = tx + 1; wx < tx + tw - 1; wx += 2) {
+      if ((wx + wy + i) % 3) px(g, wx, wy, dark ? ((wx * 7 + wy + i) % 5 ? 'y' : '<') : ')');
+    }
+  });
+  // the Space Needle
+  const nx = 19, nc = dark ? 'l' : 'i';
+  rect(g, nx, 8, 1, WATER - 8, nc); rect(g, nx - 1, 22, 3, WATER - 22, nc); rect(g, nx - 2, WATER - 3, 5, 3, nc);
+  rect(g, nx - 5, 11, 11, 2, nc); rect(g, nx - 3, 10, 7, 1, nc); rect(g, nx - 3, 13, 7, 1, dark ? 'C' : 'v');
+  rect(g, nx, 4, 1, 6, nc);
+  if (dark) { px(g, nx, 4, 'x'); rect(g, nx - 4, 12, 9, 1, 'y'); }
+  // Elliott Bay
+  rect(g, 0, WATER, W, H - WATER, dark ? '>' : '}');
+  for (let rx = 2; rx < W; rx += 7) px(g, rx + (f % 2), WATER + 2 + (rx % 3), dark ? 'y' : 'U');
+  if (rain) for (let rx = 2; rx < W; rx += 4) {                              // rain streaks
+    const ry = 1 + ((rx * 5 + f * 4) % (H - 4));
+    px(g, rx, ry, dark ? 'v' : 'U'); px(g, rx, ry + 1, dark ? 'v' : 'U');
   }
-  rect(g, 14, 1, 1, 20, 'k'); rect(g, 1, 10, 28, 1, 'k');                // window cross bars
+  rect(g, 21, 0, 2, H, '8'); rect(g, 43, 0, 2, H, '8');                      // mullions
   return frame(g);
 }
 
@@ -255,7 +286,7 @@ const MAILBOX = drawMailbox(false);
 const RACK = drawRack(0);
 
 export const SPRITES = {
-  room: sheet(160, 100, [drawRoom()]),
+  room: sheet(240, 135, [drawRoom()]),
   pennant: sheet(18, 14, [PENNANT]),
   map: sheet(34, 22, [MAP, drawMap(true)]),
   desk: sheet(46, 22, [drawDesk()]),
@@ -290,8 +321,8 @@ export const SPRITES = {
 };
 // window_<phase> and window_<phase>_rain (no rain under the aurora), two frames each
 for (const phase of SKY_PHASES) {
-  SPRITES[`window_${phase}`] = sheet(30, 22, [drawWindow(phase, 0), drawWindow(phase, 1)]);
-  if (phase !== 'aurora') SPRITES[`window_${phase}_rain`] = sheet(30, 22, [drawWindow(phase, 0, true), drawWindow(phase, 1, true)]);
+  SPRITES[`window_${phase}`] = sheet(WINDOW.w, WINDOW.h, [drawWindow(phase, 0), drawWindow(phase, 1)]);
+  if (phase !== 'aurora') SPRITES[`window_${phase}_rain`] = sheet(WINDOW.w, WINDOW.h, [drawWindow(phase, 0, true), drawWindow(phase, 1, true)]);
 }
 
 export function validateSprite(s) {

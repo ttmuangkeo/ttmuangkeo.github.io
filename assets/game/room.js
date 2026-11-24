@@ -1,6 +1,6 @@
 // Pixel room homepage: builds the room once JS runs. If anything throws, the static
 // fallback (intro + story link) stays on screen instead of a blank page.
-import { SPRITES, paintSprite } from './sprites.js';
+import { SPRITES, WINDOW as WIN, paintSprite } from './sprites.js';
 import { OBJECTS, DECOR, ROOM } from './objects.js';
 import { fitScale, buildGrid, findPath, nextWalkId, walkSpeed, NATIVE_W, NATIVE_H } from './grid.js';
 import { PANELS } from './panels.js';
@@ -466,7 +466,6 @@ function buildRoom(room) {
 }
 
 // ---------- the window: Seattle's real time of day, rain now and then, a secret aurora ----------
-const WIN = { x: 108, y: 8, w: 30, h: 22 };
 function createWindow(room, scene) {
   const canvas = doc.createElement('canvas');
   canvas.width = WIN.w; canvas.height = WIN.h;
@@ -517,7 +516,7 @@ function createWindow(room, scene) {
       frame = 0;
       draw();
       scene.hideTip();
-      const b = showBubble(room, scene, 'Northern lights! Just like back home in Alaska.', { x: 80, y: 4 });
+      const b = showBubble(room, scene, 'Northern lights! Just like back home in Alaska.', { x: NATIVE_W / 2, y: 4 });
       b.classList.add('bubble--top');
       setTimeout(() => b.remove(), 5000);
       scene.tim.wave();
@@ -588,6 +587,8 @@ function setupKeyboard(scene) {
 
 // ---------- the pager goes off once per visit and invites a triage run ----------
 const PAGE_AFTER_MS = 15_000;
+// The desktop pager bubble sits just above the pager on the desk.
+const pagerTipX = () => { const o = OBJECTS.find((obj) => obj.id === 'pager'); return o.x + SPRITES.pager.w / 2; };
 function setupPager(room, scene) {
   const btn = scene.buttons.find((b) => b.dataset.object === 'pager');
   const canvas = btn.querySelector('canvas');
@@ -619,7 +620,7 @@ function setupPager(room, scene) {
       later.addEventListener('click', () => pager.stop());
       const phone = matchMedia(PHONE_QUERY).matches;
       const b = showBubble(room, scene, "Tim's pager is going off. Help him triage the ticket?",
-        phone ? { x: 80, y: 4, actions: [go, later] } : { x: 100, y: 30, actions: [go, later] });
+        phone ? { x: NATIVE_W / 2, y: 4, actions: [go, later] } : { x: pagerTipX(), y: 52, actions: [go, later] });
       b.classList.add('bubble--pager');
       if (phone) b.classList.add('bubble--top');
       return true;
@@ -700,7 +701,7 @@ export function init() {
       const resume = doc.createElement('a');
       resume.className = 'bubble-btn'; resume.href = 'assets/Tim_Muangkeo_Resume.pdf'; resume.setAttribute('download', '');
       resume.textContent = 'Download resume';
-      const bubble = showBubble(room, scene, 'You found everything! Want to talk?', { x: 80, y: 4, actions: [contact, resume] });
+      const bubble = showBubble(room, scene, 'You found everything! Want to talk?', { x: NATIVE_W / 2, y: 4, actions: [contact, resume] });
       bubble.classList.add('bubble--top');
       contact.focus();
     };
