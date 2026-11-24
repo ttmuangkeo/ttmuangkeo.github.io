@@ -318,6 +318,17 @@ def test_resume_public():
           f"email found={has_email}; phone found={bool(leaked)}")
 
 
+def test_resume_is_current():
+    """The downloadable resume is the Nov 2026 Software Engineer version."""
+    p = ROOT / "assets" / "Tim_Muangkeo_Resume.pdf"
+    text = pdf_text(p.read_bytes())[0] if p.exists() else ""
+    flat = " ".join(text.split())
+    problems = [f"missing {w!r}" for w in ("November 2026", "500K+", "Software Engineer") if w not in flat]
+    if "Present" in flat:
+        problems.append("still says Present")
+    check("resume_is_current", not problems, "; ".join(problems))
+
+
 def test_hero_content():
     idx = parse_index()
     hero = idx.scope_text.get("trailhead", "").lower()
