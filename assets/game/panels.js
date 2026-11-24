@@ -13,8 +13,13 @@ export const PANELS = {
     story: '#route',
     pick: ['#route .stops'],
   },
+  whiteboard: {
+    title: 'By the numbers',
+    story: '#features',
+    pick: ['#features .numbers'],
+  },
   laptop: {
-    title: 'What I do now',
+    title: 'What I build',
     story: '#features',
     pick: ['#trailhead .hero-meta', '#features .feature:nth-of-type(3)', '#features .feature:nth-of-type(4)'],
   },
@@ -27,6 +32,16 @@ export const PANELS = {
     title: 'Field log',
     story: '#log',
     pick: ['#log .worked-at-wrap', '#log .log-list', '#log .log-foot'],
+  },
+  toolbox: {
+    title: 'Toolkit',
+    story: '#features',
+    pick: ['#features .toolkit'],
+  },
+  plaque: {
+    title: 'Clients & team',
+    story: '#log',
+    pick: ['#log .clients'],
   },
   keys: {
     title: 'Basecamp: sitrepp.io',

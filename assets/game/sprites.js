@@ -136,37 +136,77 @@ function drawWindow(phase, f = 0, rain = false) {
   return frame(g);
 }
 
-// ---------- objects ----------
-function drawPennant() {           // Alaska-blue pennant with a gold dipper
-  const g = grid(18, 14);
-  rect(g, 0, 0, 2, 14, 'k');
-  for (let y = 0; y < 11; y++) rect(g, 2, y, Math.max(1, Math.round(16 * (1 - Math.abs(y - 5) / 6))), 1, 'a');
-  [[4, 4], [6, 4], [7, 5], [9, 5], [9, 6], [11, 6], [12, 4]].forEach(([x, y]) => px(g, x, y, 'y'));
+// ---------- office pieces ----------
+function drawWhiteboard() {        // 52x34: the left side stays clear for the numbers overlay
+  const g = grid(52, 34);
+  box(g, 0, 0, 52, 31, '9', 'l');
+  rect(g, 1, 1, 50, 1, 'Y'); rect(g, 1, 29, 50, 1, '2');
+  [8, 13, 18, 23].forEach((y, i) => rect(g, 4, y, [22, 17, 24, 14][i], 1, i % 2 ? 'R' : 'a'));
+  rect(g, 4, 4, 14, 1, 'K');
+  [[38, 8, 'E'], [41, 12, 'E'], [44, 6, 'r'], [47, 15, 'E']].forEach(([x, h, c]) => rect(g, x, 23 - h, 2, h, c));
+  rect(g, 37, 23, 13, 1, 'K');
+  rect(g, 38, 3, 5, 4, 'y'); rect(g, 44, 3, 5, 4, 'u');
+  rect(g, 6, 31, 40, 2, 'l'); rect(g, 6, 33, 40, 1, '5');                // marker tray
+  rect(g, 12, 30, 4, 1, 'R'); rect(g, 18, 30, 4, 1, 'a'); rect(g, 24, 30, 4, 1, 'E');
   return frame(g);
 }
-function drawMap(unrolled) {       // trail map: Anchorage -> Seattle dashed route
-  const g = grid(34, 22);
-  if (!unrolled) { box(g, 0, 0, 34, 22, 'p'); }
-  else { box(g, 0, 0, 34, 22, 'U'); }
-  rect(g, 1, 1, 32, 1, 'P');
-  const pts = [[4, 6], [7, 8], [10, 7], [13, 10], [16, 9], [19, 12], [22, 13], [25, 12], [28, 16]];
-  pts.forEach(([x, y], i) => { if (i % 2 === 0 || unrolled) px(g, x, y, 'r'); px(g, x + 1, y, i % 2 ? 'R' : 'r'); });
-  box(g, 3, 5, 3, 3, 'K', 'K'); box(g, 27, 15, 3, 3, 'K', 'K'); // ANC and SEA pins
-  rect(g, 4, 17, 6, 1, 'K'); rect(g, 4, 19, 9, 1, 'P');           // legend lines
+function drawPennant() {           // framed Alaska-blue felt pennant with a gold dipper
+  const g = grid(20, 14);
+  box(g, 0, 0, 20, 14, 'p', '8'); rect(g, 1, 1, 18, 1, 'Y');
+  for (let y = 0; y < 10; y++) rect(g, 3, 2 + y, Math.max(1, Math.round(15 * (1 - Math.abs(y - 4.5) / 5.5))), 1, 'a');
+  [[5, 5], [7, 5], [8, 6], [10, 6], [10, 7], [12, 7], [13, 5]].forEach(([x, y]) => px(g, x, y, 'y'));
   return frame(g);
 }
-function drawDesk() {
-  const g = grid(46, 22);
-  rect(g, 0, 0, 46, 5, 'b'); rect(g, 0, 0, 46, 1, 'h'); rect(g, 0, 4, 46, 1, 'B');
-  rect(g, 2, 5, 3, 17, 'B'); rect(g, 41, 5, 3, 17, 'B');
-  rect(g, 30, 5, 11, 8, 'b'); rect(g, 31, 8, 9, 1, 'B'); px(g, 35, 7, 'y'); // drawer
+function drawMap(lit) {            // framed trail map: Anchorage -> Seattle dashed route
+  const g = grid(26, 18);
+  box(g, 0, 0, 26, 18, '9', '8'); rect(g, 2, 2, 22, 14, lit ? 'U' : 'p');
+  rect(g, 5, 7, 6, 1, 'P'); rect(g, 12, 11, 7, 1, 'P'); rect(g, 6, 13, 5, 1, 'P'); rect(g, 15, 4, 6, 1, 'P');
+  [[5, 4], [7, 5], [9, 6], [11, 6], [13, 8], [15, 9], [17, 10], [19, 12]].forEach(([x, y], i) => { if (i % 2 === 0 || lit) px(g, x, y, 'r'); px(g, x + 1, y, 'R'); });
+  rect(g, 3, 3, 2, 2, 'K'); rect(g, 20, 12, 2, 2, 'K');
   return frame(g);
 }
-function drawLaptop(on) {
-  const g = grid(18, 9);
-  rect(g, 2, 0, 14, 7, 'C'); rect(g, 3, 1, 12, 5, on ? 'e' : 'E');
-  if (on) { rect(g, 4, 2, 6, 1, 'K'); rect(g, 4, 4, 8, 1, 'K'); }
-  rect(g, 0, 7, 18, 2, 'c'); rect(g, 0, 8, 18, 1, 'C');
+function drawPlaque() {            // framed team photo with a brass nameplate
+  const g = grid(13, 17);
+  box(g, 0, 0, 13, 13, '9', '8');
+  rect(g, 2, 2, 9, 9, ']'); rect(g, 2, 8, 9, 3, '6');
+  [[3, 'g'], [6, 'r'], [9, 'a']].forEach(([x, c]) => { px(g, x, 4, 'H'); px(g, x, 5, 's'); rect(g, x - 1 + (x === 9 ? 0 : 0), 6, 2, 3, c); });
+  rect(g, 2, 13, 9, 4, 'b'); rect(g, 3, 14, 7, 2, 'y'); rect(g, 4, 15, 5, 1, 'j');
+  return frame(g);
+}
+function drawShelf() {             // two floating white shelves; the camera and binder sit on them
+  const g = grid(62, 32);
+  [12, 28].forEach((y) => { rect(g, 0, y, 62, 1, '9'); rect(g, 0, y + 1, 62, 1, '5'); rect(g, 6, y + 2, 1, 2, '8'); rect(g, 55, y + 2, 1, 2, '8'); });
+  [[2, 'a', 9], [4, 'r', 10], [6, 'P', 8], [8, 'g', 10], [10, 'y', 9]].forEach(([x, c, h]) => rect(g, x, 12 - h, 2, h, c));
+  for (let i = 0; i < 8; i++) px(g, 13 + Math.floor(i / 2), 11 - i, 'R');           // leaning book
+  rect(g, 17, 8, 6, 4, '9'); rect(g, 21, 8, 2, 4, '5');                             // little plant
+  [[16, 4], [19, 2], [21, 5], [18, 6]].forEach(([x, y]) => rect(g, x, y, 3, 2, 'L')); px(g, 19, 3, 'M');
+  rect(g, 52, 5, 7, 7, '8'); rect(g, 53, 6, 5, 3, 'l'); px(g, 55, 10, 'e');         // speaker
+  rect(g, 22, 25, 11, 2, 'a'); rect(g, 23, 23, 9, 2, 'O'); rect(g, 22, 21, 10, 2, 'P'); // book stack
+  rect(g, 39, 24, 6, 4, 'O'); rect(g, 39, 24, 6, 1, 'T');                           // succulent
+  [[38, 21], [41, 20], [43, 22]].forEach(([x, y]) => rect(g, x, y, 2, 3, 'L'));
+  box(g, 50, 19, 7, 9, ']', '8');                                                   // small photo
+  return frame(g);
+}
+function drawDesk() {              // white-top standing desk, black frame, keyboard and mouse
+  const g = grid(68, 34);
+  rect(g, 24, 1, 18, 3, '8'); for (let x = 25; x < 41; x += 2) px(g, x, 2, 'l'); rect(g, 46, 2, 3, 2, '8');
+  rect(g, 0, 4, 68, 2, '9'); rect(g, 0, 4, 68, 1, 'Y'); rect(g, 0, 6, 68, 1, '5');
+  rect(g, 4, 7, 60, 2, '8');
+  rect(g, 6, 9, 3, 23, '8'); rect(g, 59, 9, 3, 23, '8'); rect(g, 7, 9, 1, 23, 'm'); rect(g, 60, 9, 1, 23, 'm');
+  rect(g, 2, 31, 11, 2, '8'); rect(g, 55, 31, 11, 2, '8');
+  rect(g, 1, 33, 13, 1, '0'); rect(g, 54, 33, 13, 1, '0');
+  return frame(g);
+}
+function drawMonitors(f) {         // dual monitors: code on the left, a dashboard on the right
+  const g = grid(46, 18);
+  for (const ox of [0, 25]) {
+    box(g, ox, 0, 21, 13, 'N', '8');
+    rect(g, ox + 9, 13, 3, 3, '8'); rect(g, ox + 5, 16, 11, 2, '8'); rect(g, ox + 6, 16, 9, 1, 'm');
+  }
+  const lines = [[1, 6, 'e'], [3, 9, 'u'], [3, 5, 'y'], [1, 11, 'e'], [5, 7, 'u'], [3, 8, 'y'], [1, 10, 'e'], [3, 4, 'u']];
+  for (let i = 0; i < 5; i++) { const [x, w, c] = lines[(i + f * 3) % lines.length]; rect(g, 2 + x, 2 + i * 2, w, 1, c); }
+  [[3, 6, 4, 8], [5, 4, 7, 9], [6, 8, 5, 7]][f % 3].forEach((h, i) => rect(g, 28 + i * 4, 11 - h, 2, h, i === 2 ? 'y' : 'e'));
+  rect(g, 27, 11, 17, 1, 'm');
   return frame(g);
 }
 function drawMug(steam) {
@@ -177,68 +217,97 @@ function drawMug(steam) {
 }
 function drawPager(lit) {          // pager with an alert light
   const g = grid(7, 7);
-  box(g, 0, 2, 7, 5, 'c'); rect(g, 1, 3, 5, 2, 'e'); rect(g, 2, 0, 3, 2, lit ? 'x' : 'R');
+  box(g, 0, 2, 7, 5, '8'); rect(g, 1, 3, 5, 2, 'e'); rect(g, 2, 0, 3, 2, lit ? 'x' : 'R');
   return frame(g);
 }
-function drawShelf() {             // bookshelf (the logbook is a separate object on it)
-  const g = grid(22, 28);
-  box(g, 0, 0, 22, 28, 'B', 'k');
-  rect(g, 1, 9, 20, 1, 'k'); rect(g, 1, 18, 20, 1, 'k');
-  [[2, 'a', 6], [4, 'r', 7], [6, 'g', 5], [8, 'P', 7], [11, 'R', 6]].forEach(([x, c, hgt]) => rect(g, x, 9 - hgt, 2, hgt, c));
-  [[2, 'y', 6], [4, 'v', 7], [6, 'p', 8], [9, 'o', 6], [12, 'l', 7], [15, 'g', 6]].forEach(([x, c, hgt]) => rect(g, x, 18 - hgt, 2, hgt, c));
-  rect(g, 3, 22, 6, 4, 'P'); rect(g, 12, 21, 7, 5, 'c'); // boxes on the bottom shelf
+function drawBinder(pulled) {      // blue binder on the lower shelf
+  const g = grid(9, 12);
+  const y = pulled ? 0 : 1;
+  box(g, 0, y, 9, 11, 'a', '8'); rect(g, 2, y + 2, 5, 3, 'p'); rect(g, 3, y + 3, 3, 1, 'K'); px(g, 4, y + 8, 'l');
   return frame(g);
 }
-function drawLogbook(open) {
-  const g = grid(9, 8);
-  if (!open) { box(g, 1, 0, 7, 8, 'R'); rect(g, 3, 2, 3, 1, 'y'); rect(g, 1, 0, 1, 8, 'k'); }
-  else { box(g, 0, 2, 9, 6, 'p'); rect(g, 4, 2, 1, 6, 'k'); rect(g, 1, 4, 2, 1, 'P'); rect(g, 6, 4, 2, 1, 'P'); }
+function drawToolbox(open) {       // red toolbox with a wrench sticker
+  const g = grid(14, 11);
+  if (open) { rect(g, 3, 0, 1, 5, 'l'); rect(g, 2, 0, 3, 1, 'l'); rect(g, 9, 1, 1, 4, 'y'); rect(g, 9, 0, 1, 1, '8'); }
+  else { rect(g, 4, 0, 6, 1, '8'); rect(g, 4, 1, 1, 2, '8'); rect(g, 9, 1, 1, 2, '8'); }
+  box(g, 0, 3, 14, 8, 'r', '8'); rect(g, 1, 4, 12, 1, 'o'); rect(g, 1, 6, 12, 1, 'R');
+  px(g, 6, 6, 'y'); px(g, 7, 6, 'y');
+  rect(g, 3, 8, 3, 1, 'p'); px(g, 2, 8, 'p'); px(g, 6, 7, 'p');                     // wrench sticker
   return frame(g);
 }
-function drawKeys(jingle) {        // wall hook with truck keys
+function drawKeys(jingle) {        // black wall hook with truck keys
   const g = grid(8, 10);
-  rect(g, 0, 0, 8, 2, 'b'); rect(g, 0, 0, 8, 1, 'h');
+  rect(g, 0, 0, 8, 2, '8'); rect(g, 0, 0, 8, 1, 'm');
   const dx = jingle ? 1 : 0;
   rect(g, 3 + dx, 2, 1, 2, 'l'); box(g, 2 + dx, 4, 4, 4, 'm', 'C'); rect(g, 3 + dx, 8, 1, 2, 'l'); px(g, 4 + dx, 9, 'l');
   px(g, 3 + dx, 5, 'r');
   return frame(g);
 }
-function drawCamera(flash) {       // camera bag with a lens peeking out
-  const g = grid(16, 13);
-  rect(g, 3, 0, 10, 2, 'C');
-  box(g, 0, 2, 16, 11, 'c', 'C');
-  rect(g, 1, 3, 14, 1, 'm');
-  box(g, 5, 5, 6, 6, 'm', 'C'); rect(g, 7, 7, 2, 2, flash ? 'U' : 'u');
-  px(g, 13, 4, 'r');
+function drawCamera(flash) {       // mirrorless camera on the top shelf
+  const g = grid(14, 10);
+  rect(g, 4, 0, 6, 2, '8'); rect(g, 0, 2, 14, 8, '8'); rect(g, 0, 2, 3, 8, 'c'); rect(g, 1, 3, 12, 1, 'm');
+  box(g, 4, 3, 7, 7, 'm', 'C'); rect(g, 6, 5, 3, 3, flash ? 'U' : 'u'); px(g, 6, 5, 'Y');
+  px(g, 11, 1, 'r');
   return frame(g);
 }
-function drawMailbox(open) {
-  const g = grid(12, 22);
-  rect(g, 5, 9, 2, 13, 'k');
-  box(g, 0, 2, 12, 8, 'o', 'R');
-  rect(g, 1, 3, 10, 1, 'r');
-  if (open) { rect(g, 11, 1, 1, 8, 'R'); rect(g, 2, 5, 6, 3, 'p'); }
-  else { rect(g, 9, 0, 2, 4, 'y'); }
+function drawDoor(ajar) {          // oak door with a little rust "let's talk" sign
+  const g = grid(22, 50);
+  rect(g, 0, 0, 22, 50, '5'); rect(g, 0, 0, 22, 1, 'A');
+  rect(g, 2, 2, 18, 48, ajar ? '8' : '6');
+  const w = ajar ? 14 : 18;
+  rect(g, 2, 2, w, 48, '6');
+  for (let x = 5; x < 2 + w; x += 5) rect(g, x, 3, 1, 46, '7');
+  rect(g, 2, 2, w, 1, 'A');
+  const hx = 2 + w - 4;
+  rect(g, hx - 1, 26, 4, 1, '8'); px(g, hx + 2, 27, '8');
+  box(g, 4, 11, w - 4, 7, 'r', 'R'); rect(g, 6, 13, w - 8, 1, '9'); rect(g, 7, 15, w - 10, 1, '9');
   return frame(g);
 }
 function drawRack(f) {             // server rack: four units with blinking status lights
-  const g = grid(14, 24);
-  box(g, 0, 0, 14, 22, 'c');
-  rect(g, 1, 22, 2, 2, 'k'); rect(g, 11, 22, 2, 2, 'k');         // feet
-  [2, 7, 12, 17].forEach((y, i) => {
-    box(g, 1, y, 12, 4, 'C', 'k');
-    rect(g, 2, y + 1, 6, 1, 'm'); rect(g, 2, y + 2, 4, 1, 'm');    // vents
+  const g = grid(16, 28);
+  box(g, 0, 0, 16, 26, 'c', '8'); rect(g, 1, 1, 14, 1, 'm');
+  [3, 8, 13, 18].forEach((y, i) => {
+    box(g, 2, y, 12, 4, 'C', '8');
+    rect(g, 3, y + 1, 5, 1, 'm'); rect(g, 3, y + 2, 3, 1, 'm');
     const on = (i + f) % 2 === 0;
-    px(g, 10, y + 1, on ? 'e' : 'E'); px(g, 11, y + 1, on ? 'E' : 'e');
-    px(g, 10, y + 2, i === 1 ? (f ? 'y' : 'j') : 'E');
+    px(g, 11, y + 1, on ? 'e' : 'E'); px(g, 12, y + 1, on ? 'E' : 'e');
+    px(g, 11, y + 2, i === 1 ? (f ? 'y' : 'j') : 'E');
   });
+  rect(g, 2, 23, 12, 1, 'm');
+  rect(g, 1, 26, 3, 2, '8'); rect(g, 12, 26, 3, 2, '8');
   return frame(g);
 }
-function drawRug() {
-  const g = grid(44, 18);
-  box(g, 0, 0, 44, 18, 'o', 'R');
-  rect(g, 3, 3, 38, 12, 'r');
-  for (let x = 6; x < 38; x += 6) rect(g, x, 8, 3, 2, 'P');
+function drawSofa() {              // terracotta sofa against the sage wall
+  const g = grid(52, 22);
+  rect(g, 3, 0, 46, 11, 'O'); rect(g, 3, 0, 46, 1, 'j'); rect(g, 18, 1, 1, 9, 'T'); rect(g, 33, 1, 1, 9, 'T');
+  rect(g, 7, 6, 8, 6, 'y'); rect(g, 7, 6, 8, 1, 'Y'); rect(g, 37, 6, 8, 6, 'V'); rect(g, 37, 6, 8, 1, 'Y');
+  rect(g, 3, 11, 46, 5, 'O'); rect(g, 3, 11, 46, 1, 'j'); rect(g, 3, 15, 46, 1, 'T'); rect(g, 26, 12, 1, 3, 'T');
+  rect(g, 0, 5, 5, 13, 'T'); rect(g, 47, 5, 5, 13, 'T'); rect(g, 0, 5, 5, 1, 'O'); rect(g, 47, 5, 5, 1, 'O');
+  rect(g, 3, 16, 46, 2, 'T');
+  rect(g, 3, 18, 2, 3, '8'); rect(g, 47, 18, 2, 3, '8'); rect(g, 2, 21, 48, 1, '0');
+  return frame(g);
+}
+function drawPlant(f) {            // tall fiddle-leaf fig in a white pot; f sways the top leaves
+  const g = grid(12, 34);
+  rect(g, 5, 6, 1, 18, 'M');
+  [[0, 2], [6, 0], [0, 8], [7, 6], [1, 13], [7, 12], [0, 18], [6, 18]].forEach(([x, y], i) => {
+    const dx = i < 4 && f ? 1 : 0;
+    rect(g, x + dx, y + 1, 5, 2, 'L'); rect(g, x + dx + 1, y, 3, 4, 'L'); rect(g, x + dx + 1, y + 2, 3, 1, 'M');
+  });
+  rect(g, 1, 23, 10, 2, '2'); rect(g, 2, 25, 8, 9, '9'); rect(g, 2, 25, 8, 1, 'Y'); rect(g, 8, 25, 2, 9, '5');
+  return frame(g);
+}
+function drawPendant() {           // short black pendant light with a warm bulb, hung over a mullion
+  const g = grid(9, 11);
+  rect(g, 4, 0, 1, 4, '8'); rect(g, 2, 4, 5, 1, '8'); rect(g, 1, 5, 7, 2, '8'); rect(g, 0, 7, 9, 1, '8');
+  rect(g, 3, 8, 3, 1, 'y'); px(g, 4, 9, 'j');
+  return frame(g);
+}
+function drawRug() {               // big cream rug
+  const g = grid(120, 24);
+  box(g, 0, 0, 120, 24, 'V', 'X');
+  box(g, 3, 3, 114, 18, 'V', 'X');
+  for (let x = 10; x < 110; x += 10) rect(g, x, 11, 4, 2, 'X');
   return frame(g);
 }
 
@@ -275,31 +344,31 @@ const walkSide = [
 function icon(draw) { const g = grid(16, 16); draw(g); return sheet(16, 16, [frame(g)]); }
 function fit(src, g, ox, oy) { src.forEach((row, y) => [...row].forEach((c, x) => { if (c !== '.') px(g, ox + x, oy + y, c); })); }
 
-const PENNANT = drawPennant();
-const MAP = drawMap(false);
-const LAPTOP = drawLaptop(true);
-const PAGER = drawPager(false);
-const LOGBOOK = drawLogbook(false);
-const KEYS = drawKeys(false);
+const MONITORS = [0, 1, 2].map(drawMonitors);
+const TOOLBOX = drawToolbox(false);
 const CAMERA = drawCamera(false);
-const MAILBOX = drawMailbox(false);
-const RACK = drawRack(0);
 
 export const SPRITES = {
   room: sheet(240, 135, [drawRoom()]),
-  pennant: sheet(18, 14, [PENNANT]),
-  map: sheet(34, 22, [MAP, drawMap(true)]),
-  desk: sheet(46, 22, [drawDesk()]),
-  laptop: sheet(18, 9, [LAPTOP, drawLaptop(false)]),
+  whiteboard: sheet(52, 34, [drawWhiteboard()]),
+  pennant: sheet(20, 14, [drawPennant()]),
+  map: sheet(26, 18, [drawMap(false), drawMap(true)]),
+  plaque: sheet(13, 17, [drawPlaque()]),
+  shelf: sheet(62, 32, [drawShelf()]),
+  desk: sheet(68, 34, [drawDesk()]),
+  laptop: sheet(46, 18, MONITORS),
   mug: sheet(6, 8, [drawMug(true), drawMug(false)]),
-  pager: sheet(7, 7, [PAGER, drawPager(true)]),
-  shelf: sheet(22, 28, [drawShelf()]),
-  logbook: sheet(9, 8, [LOGBOOK, drawLogbook(true)]),
-  keys: sheet(8, 10, [KEYS, drawKeys(true)]),
-  camera: sheet(16, 13, [CAMERA, drawCamera(true)]),
-  mailbox: sheet(12, 22, [MAILBOX, drawMailbox(true)]),
-  rack: sheet(14, 24, [RACK, drawRack(1)]),
-  rug: sheet(44, 18, [drawRug()]),
+  pager: sheet(7, 7, [drawPager(false), drawPager(true)]),
+  logbook: sheet(9, 12, [drawBinder(false), drawBinder(true)]),
+  toolbox: sheet(14, 11, [TOOLBOX, drawToolbox(true)]),
+  keys: sheet(8, 10, [drawKeys(false), drawKeys(true)]),
+  camera: sheet(14, 10, [CAMERA, drawCamera(true)]),
+  mailbox: sheet(22, 50, [drawDoor(false), drawDoor(true)]),
+  rack: sheet(16, 28, [drawRack(0), drawRack(1)]),
+  sofa: sheet(52, 22, [drawSofa()]),
+  plant: sheet(12, 34, [drawPlant(0), drawPlant(1)]),
+  pendant: sheet(9, 11, [drawPendant()]),
+  rug: sheet(120, 24, [drawRug()]),
 
   tim_idle_down: sheet(10, 20, [tim(HEAD_DOWN, BODY, HIPS, LEGS.stand), tim(HEAD_DOWN, BREATHE, HIPS, LEGS.stand)]),
   tim_walk_down: sheet(10, 20, [LEGS.stand, LEGS.stepL, LEGS.stand, LEGS.stepR].map((l) => tim(HEAD_DOWN, BODY, HIPS, l))),
@@ -309,15 +378,18 @@ export const SPRITES = {
   tim_use: sheet(10, 20, [tim(HEAD_UP, USE_0, HIPS, LEGS.stand), tim(HEAD_UP, USE_1, HIPS, LEGS.stand)]),
   tim_wave: sheet(10, 20, [tim(HEAD_DOWN, WAVE_0, HIPS, LEGS.stand), tim(HEAD_DOWN, WAVE_1, HIPS, LEGS.stand)]),
 
-  icon_pennant: icon((g) => fit(PENNANT, g, 0, 1)),
-  icon_map: icon((g) => { box(g, 0, 2, 16, 12, 'p'); [[3, 5], [5, 7], [7, 6], [9, 9], [11, 8]].forEach(([x, y]) => px(g, x, y, 'r')); box(g, 2, 4, 3, 3, 'K', 'K'); box(g, 11, 9, 3, 3, 'K', 'K'); }),
-  icon_laptop: icon((g) => fit(LAPTOP, g, -1, 4)),
-  icon_pager: icon((g) => { box(g, 2, 5, 12, 9, 'c'); rect(g, 4, 7, 8, 3, 'e'); rect(g, 6, 2, 4, 3, 'x'); }),
-  icon_logbook: icon((g) => { box(g, 3, 1, 10, 14, 'R'); rect(g, 3, 1, 2, 14, 'k'); rect(g, 7, 4, 4, 1, 'y'); rect(g, 7, 6, 3, 1, 'y'); }),
+  icon_pennant: icon((g) => { box(g, 0, 1, 16, 13, 'p', '8'); for (let y = 0; y < 9; y++) rect(g, 2, 3 + y, Math.max(1, Math.round(12 * (1 - Math.abs(y - 4) / 5))), 1, 'a'); [[4, 6], [6, 6], [7, 7], [9, 7]].forEach(([x, y]) => px(g, x, y, 'y')); }),
+  icon_map: icon((g) => { box(g, 0, 2, 16, 12, '9', '8'); rect(g, 1, 3, 14, 10, 'p'); [[3, 5], [5, 7], [7, 6], [9, 9], [11, 8]].forEach(([x, y]) => px(g, x, y, 'r')); rect(g, 2, 4, 2, 2, 'K'); rect(g, 12, 9, 2, 2, 'K'); }),
+  icon_whiteboard: icon((g) => { box(g, 0, 1, 16, 12, '9', 'l'); rect(g, 2, 4, 6, 1, 'a'); rect(g, 2, 7, 5, 1, 'R'); [[10, 3], [12, 5], [14, 2]].forEach(([x, h]) => rect(g, x - 1, 11 - h, 1, h, 'E')); rect(g, 2, 13, 12, 2, 'l'); }),
+  icon_laptop: icon((g) => { box(g, 0, 3, 7, 7, 'N', '8'); box(g, 9, 3, 7, 7, 'N', '8'); rect(g, 2, 5, 3, 1, 'e'); rect(g, 2, 7, 2, 1, 'u'); rect(g, 11, 6, 1, 3, 'e'); rect(g, 13, 5, 1, 4, 'y'); rect(g, 3, 10, 1, 2, '8'); rect(g, 12, 10, 1, 2, '8'); rect(g, 1, 12, 14, 2, '8'); }),
+  icon_pager: icon((g) => { box(g, 2, 5, 12, 9, '8'); rect(g, 4, 7, 8, 3, 'e'); rect(g, 6, 2, 4, 3, 'x'); }),
+  icon_logbook: icon((g) => { box(g, 3, 1, 10, 14, 'a', '8'); rect(g, 5, 3, 6, 4, 'p'); rect(g, 6, 4, 4, 1, 'K'); px(g, 7, 11, 'l'); px(g, 8, 11, 'l'); }),
+  icon_toolbox: icon((g) => fit(TOOLBOX, g, 1, 3)),
+  icon_plaque: icon((g) => { box(g, 2, 0, 12, 11, '9', '8'); rect(g, 3, 1, 10, 9, ']'); rect(g, 3, 7, 10, 3, '6'); [[5, 'g'], [8, 'r'], [11, 'a']].forEach(([x, c]) => { px(g, x, 3, 'H'); px(g, x, 4, 's'); rect(g, x, 5, 1, 3, c); }); rect(g, 3, 12, 10, 3, 'b'); rect(g, 4, 13, 8, 1, 'y'); }),
   icon_keys: icon((g) => { rect(g, 7, 0, 2, 3, 'l'); box(g, 4, 3, 8, 7, 'm', 'C'); px(g, 7, 6, 'r'); rect(g, 7, 10, 2, 5, 'l'); px(g, 9, 13, 'l'); px(g, 9, 11, 'l'); }),
-  icon_camera: icon((g) => fit(CAMERA, g, 0, 2)),
-  icon_rack: icon((g) => { box(g, 2, 0, 12, 16, 'c'); [2, 6, 10].forEach((y) => { box(g, 3, y, 10, 3, 'C', 'k'); rect(g, 4, y + 1, 4, 1, 'm'); px(g, 10, y + 1, 'e'); px(g, 11, y + 1, y === 6 ? 'y' : 'E'); }); }),
-  icon_mailbox: icon((g) => { box(g, 1, 3, 14, 8, 'o', 'R'); rect(g, 2, 4, 12, 1, 'r'); rect(g, 12, 1, 2, 5, 'y'); rect(g, 7, 11, 2, 5, 'k'); }),
+  icon_camera: icon((g) => fit(CAMERA, g, 1, 3)),
+  icon_rack: icon((g) => { box(g, 2, 0, 12, 16, 'c', '8'); [2, 6, 10].forEach((y) => { box(g, 3, y, 10, 3, 'C', '8'); rect(g, 4, y + 1, 4, 1, 'm'); px(g, 10, y + 1, 'e'); px(g, 11, y + 1, y === 6 ? 'y' : 'E'); }); }),
+  icon_mailbox: icon((g) => { box(g, 3, 0, 10, 16, '6', '5'); rect(g, 6, 1, 1, 15, '7'); rect(g, 5, 4, 6, 3, 'r'); rect(g, 6, 5, 4, 1, '9'); rect(g, 10, 9, 2, 1, '8'); }),
 };
 // window_<phase> and window_<phase>_rain (no rain under the aurora), two frames each
 for (const phase of SKY_PHASES) {

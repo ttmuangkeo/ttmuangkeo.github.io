@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { PALETTE, SPRITES, WINDOW, validateSprite } from '../assets/game/sprites.js';
 import { NATIVE_W, NATIVE_H } from '../assets/game/grid.js';
 
-const OBJECT_IDS = ['pennant', 'map', 'laptop', 'pager', 'logbook', 'keys', 'camera', 'rack', 'mailbox'];
+const OBJECT_IDS = ['pennant', 'map', 'whiteboard', 'laptop', 'pager', 'logbook', 'toolbox', 'plaque', 'keys', 'camera', 'rack', 'mailbox'];
 const GAME_PANELS = ['rack']; // objects whose panel is a mini-game, not story content
 const TIM_SHEETS = ['tim_idle_down', 'tim_walk_down', 'tim_walk_up', 'tim_walk_left', 'tim_walk_right', 'tim_use', 'tim_wave'];
 
@@ -24,7 +24,7 @@ test('validateSprite catches bad rows and unknown palette keys', () => {
 });
 
 test('required sprites exist', () => {
-  const required = ['room', ...OBJECT_IDS, 'desk', 'shelf', 'rug', 'mug', ...TIM_SHEETS,
+  const required = ['room', ...OBJECT_IDS, 'desk', 'shelf', 'rug', 'mug', 'sofa', 'plant', 'pendant', ...TIM_SHEETS,
     ...OBJECT_IDS.map((id) => `icon_${id}`)];
   for (const key of required) assert.ok(SPRITES[key], `missing sprite ${key}`);
 });
@@ -68,7 +68,7 @@ test('palette keys are single characters with "." transparent', () => {
 import { OBJECTS, ROOM } from '../assets/game/objects.js';
 import { fitScale } from '../assets/game/grid.js';
 
-test('OBJECTS has the 9 ids in order', () => {
+test('OBJECTS has the 12 ids in order', () => {
   assert.deepEqual(OBJECTS.map((o) => o.id), OBJECT_IDS);
 });
 
@@ -79,6 +79,23 @@ test("every object's sprite exists and lies inside the room", () => {
     assert.ok(o.x >= 0 && o.y >= 0 && o.x + s.w <= NATIVE_W && o.y + s.h <= NATIVE_H, `${o.id} out of bounds`);
     assert.ok(o.label && o.ariaLabel, `${o.id} needs label and ariaLabel`);
   }
+});
+
+test('the monitors cycle at least three screens and the plant sways', () => {
+  assert.ok(SPRITES.laptop.frames.length >= 3, 'monitor frames');
+  assert.equal(SPRITES.plant.frames.length, 2, 'plant frames');
+});
+
+test('no two objects have use spots within one step of each other', () => {
+  for (const a of OBJECTS) for (const b of OBJECTS) {
+    if (a === b) continue;
+    const d = Math.abs(a.useSpot.col - b.useSpot.col) + Math.abs(a.useSpot.row - b.useSpot.row);
+    assert.ok(d > 1, `${a.id} and ${b.id} use spots are ${d} apart`);
+  }
+});
+
+test('the room grid is 30x16 with the floor from row 9', () => {
+  assert.deepEqual([ROOM.cols, ROOM.rows, ROOM.cell, ROOM.floorTopRow], [30, 16, 8, 9]);
 });
 
 test('useSpots are walkable floor cells', () => {
@@ -284,6 +301,16 @@ test('triage tickets are complete and their scores match their verdicts', () => 
   const panel = createIncidentPanel({ doc: {} });
   assert.equal(typeof panel.render, 'function');
   assert.ok(panel.title && panel.story.startsWith('#'));
+});
+
+test('a visitor who found the 9 old objects still has the 3 new ones to find', () => {
+  const store = memoryStorage();
+  store.setItem('tim-room-found', JSON.stringify(['pennant', 'map', 'laptop', 'pager', 'logbook', 'keys', 'camera', 'rack', 'mailbox']));
+  const s = createFoundState(store);
+  assert.equal(s.count(), 9);
+  assert.equal(s.allFound(), false);
+  ['whiteboard', 'toolbox', 'plaque'].forEach((id) => s.markFound(id));
+  assert.equal(s.allFound(), true);
 });
 
 test('found-state ids come from OBJECTS', () => {

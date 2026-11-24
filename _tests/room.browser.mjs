@@ -63,7 +63,7 @@ await scenario('clicking a new object during a use animation opens the new panel
   await open();
   await ev(`document.querySelector('[data-object="logbook"]').click()`);
   // wait until Tim stands at the logbook spot, then click the mailbox mid-animation
-  for (let i = 0; i < 60; i++) { if ((await ev(`(() => { const t = document.querySelector('.tim').style; return t.getPropertyValue('--x') + ',' + t.getPropertyValue('--y'); })()`)) === '31,36') break; await sleep(40); }
+  for (let i = 0; i < 60; i++) { if ((await ev(`(() => { const t = document.querySelector('.tim').style; return t.getPropertyValue('--x') + ',' + t.getPropertyValue('--y'); })()`)) === '79,60') break; await sleep(40); } // 79,60: Tim at the binder's use spot (10,9)
   await sleep(150);
   await ev(`document.querySelector('[data-object="mailbox"]').click()`);
   for (let i = 0; i < 35; i++) {
@@ -144,16 +144,15 @@ const reduceMotion = (on) => send('Emulation.setEmulatedMedia', { features: [{ n
 
 await scenario('arrow keys walk Tim and E uses what he is standing next to', async () => {
   await open();
-  const [x0] = await timXY();
-  await hold('ArrowRight', 39, 800);
-  const [x1] = await timXY();
-  if (!(x1 > x0 + 20)) return `Tim did not walk right: ${x0} -> ${x1}`;
-  await hold('ArrowUp', 38, 250);
+  const [, y0] = await timXY();
+  await hold('ArrowUp', 38, 1200); // from the rug straight up to the wall, under the trail map
+  const [, y1] = await timXY();
+  if (!(y1 < y0 - 20)) return `Tim did not walk up: ${y0} -> ${y1}`;
   const tip = await ev(`document.querySelector('#room .tip').hidden ? '' : document.querySelector('#room .tip').textContent`);
-  if (tip !== 'E · Laptop') return `reach hint was ${JSON.stringify(tip)}`;
+  if (tip !== 'E · Trail map') return `reach hint was ${JSON.stringify(tip)}`;
   await key('e', 69); await sleep(2200);
   const p = await panel();
-  return p.open && p.obj === 'laptop' ? '' : `panel ${JSON.stringify(p)}`;
+  return p.open && p.obj === 'map' ? '' : `panel ${JSON.stringify(p)}`;
 });
 
 await scenario('the Konami code brings up the northern lights', async () => {
@@ -229,7 +228,7 @@ await scenario('the server rack runs the EWS to Graph cutover while the agent vi
 
 await scenario('closing the rack mid-run stops it cleanly, and the Incident log links to it', async () => {
   await open();
-  await ev(`document.querySelector('[data-object="pager"]').click()`); await sleep(1800);
+  await ev(`document.querySelector('[data-object="pager"]').click()`); await sleep(2800); // walk up to 1.2 s, use 0.7 s, then the panel
   const btn = await ev(`[...document.querySelectorAll('#panel .inc-callout button')].map((b) => b.textContent)`);
   if (!btn.includes('▶ Run the cutover')) return `no cutover callout: ${JSON.stringify(btn)}`;
   await ev(`[...document.querySelectorAll('#panel .inc-callout button')].find((b) => b.textContent === '▶ Run the cutover').click()`); await sleep(300);
@@ -244,7 +243,7 @@ await scenario('closing the rack mid-run stops it cleanly, and the Incident log 
 await scenario('the counter and tray count every object', async () => {
   await open({ w: 375, h: 812, mobile: true });
   const r = await ev(`({ hud: document.querySelector('.hud-found').textContent.replace(/\\s+/g, ' ').trim(), tray: document.querySelector('.tray-head').textContent, buttons: document.querySelectorAll('.tray-btn').length, cols: getComputedStyle(document.querySelector('.tray-grid')).gridTemplateColumns.split(' ').length, scroll: document.documentElement.scrollWidth > innerWidth })`);
-  return r.hud === 'Found 0/9' && r.tray.endsWith('0/9') && r.buttons === 9 && r.cols === 3 && !r.scroll ? '' : JSON.stringify(r);
+  return r.hud === 'Found 0/12' && r.tray.endsWith('0/12') && r.buttons === 12 && r.cols === 3 && !r.scroll ? '' : JSON.stringify(r);
 });
 
 ws.close(); cleanup();
