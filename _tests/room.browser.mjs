@@ -228,8 +228,9 @@ await scenario('the server rack runs the EWS to Graph cutover while the agent vi
 
 await scenario('closing the rack mid-run stops it cleanly, and the Incident log links to it', async () => {
   await open();
-  await ev(`document.querySelector('[data-object="pager"]').click()`); await sleep(2800); // walk up to 1.2 s, use 0.7 s, then the panel
-  const btn = await ev(`[...document.querySelectorAll('#panel .inc-callout button')].map((b) => b.textContent)`);
+  await ev(`document.querySelector('[data-object="pager"]').click()`);
+  let btn = [];
+  for (let i = 0; i < 50 && !btn.length; i++) { await sleep(100); btn = await ev(`[...document.querySelectorAll('#panel .inc-callout button')].map((b) => b.textContent)`); }
   if (!btn.includes('▶ Run the cutover')) return `no cutover callout: ${JSON.stringify(btn)}`;
   await ev(`[...document.querySelectorAll('#panel .inc-callout button')].find((b) => b.textContent === '▶ Run the cutover').click()`); await sleep(300);
   if ((await panel()).obj !== 'rack') return 'callout did not open the rack panel';
@@ -244,6 +245,35 @@ await scenario('the counter and tray count every object', async () => {
   await open({ w: 375, h: 812, mobile: true });
   const r = await ev(`({ hud: document.querySelector('.hud-found').textContent.replace(/\\s+/g, ' ').trim(), tray: document.querySelector('.tray-head').textContent, buttons: document.querySelectorAll('.tray-btn').length, cols: getComputedStyle(document.querySelector('.tray-grid')).gridTemplateColumns.split(' ').length, scroll: document.documentElement.scrollWidth > innerWidth })`);
   return r.hud === 'Found 0/12' && r.tray.endsWith('0/12') && r.buttons === 12 && r.cols === 3 && !r.scroll ? '' : JSON.stringify(r);
+});
+
+await scenario('the whiteboard shows four numbers on desktop and hides on phones', async () => {
+  await open();
+  await sleep(600);
+  const r = await ev(`(() => {
+    const wb = document.querySelector('[data-object="whiteboard"]').getBoundingClientRect();
+    const lines = [...document.querySelectorAll('#room .board-overlay .board-line')];
+    return { n: lines.length, texts: lines.map((l) => l.textContent.trim()),
+      inside: lines.every((l) => { const b = l.getBoundingClientRect(); return b.width > 0 && b.left >= wb.left && b.right <= wb.right && b.top >= wb.top && b.bottom <= wb.bottom; }) };
+  })()`);
+  if (r.n !== 4 || r.texts.some((t) => !t) || !r.inside) return `desktop ${JSON.stringify(r)}`;
+  await open({ w: 375, h: 812, mobile: true });
+  await sleep(600);
+  const shown = await ev(`(() => { const o = document.querySelector('#room .board-overlay'); return !!o && getComputedStyle(o).display !== 'none' && o.getBoundingClientRect().width > 0; })()`);
+  return shown ? 'overlay visible on a phone' : '';
+});
+
+await scenario('the room fits a 1280x720 laptop with no scrolling', async () => {
+  await open({ w: 1280, h: 720 });
+  const r = await ev(`({ h: document.documentElement.scrollHeight, w: document.documentElement.scrollWidth, ih: innerHeight, iw: innerWidth })`);
+  return r.h <= r.ih && r.w <= r.iw ? '' : JSON.stringify(r);
+});
+
+await scenario('a failed story fetch leaves the whiteboard empty without errors', async () => {
+  await open({ before: `const f = window.fetch; window.fetch = (u, o) => String(u).includes('/story/') ? Promise.reject(new Error('offline')) : f(u, o);` });
+  await sleep(600);
+  const r = await ev(`({ errs: window.__errs, text: (document.querySelector('#room .board-overlay')?.textContent || '').trim() })`);
+  return !r.errs.length && !r.text ? '' : JSON.stringify(r);
 });
 
 ws.close(); cleanup();

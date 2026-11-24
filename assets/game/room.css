@@ -1,12 +1,11 @@
-/* Pixel room homepage. Field Manual palette, dark cabin backdrop. */
+/* Pixel office homepage. Field Manual palette on a light page. */
 :root {
   --paper: #eee8da;
   --ink: #1f2a22;
   --rust: #d9622b;
   --rust-text: #a8441a;
   --muted: #38443b;
-  --night: #2a2f2a;
-  --night-2: #1d211d;
+  --page: #e7e1d4;
   --font-body: "Space Grotesk", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --hud-h: 3.25rem;
@@ -15,7 +14,7 @@
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; }
 body {
-  min-height: 100vh; background: var(--night); color: var(--paper);
+  min-height: 100vh; background: var(--page); color: var(--ink);
   font-family: var(--font-body); line-height: 1.5;
 }
 a { color: inherit; }
@@ -44,9 +43,9 @@ a { color: inherit; }
 /* ---------- Fallback (shown until the room is ready) ---------- */
 .fallback { max-width: 38rem; margin: 0 auto; padding: 4rem 1.25rem; }
 .fallback h1 { margin: 0 0 1rem; font-size: clamp(2rem, 6vw, 3.25rem); line-height: 1; text-transform: uppercase; letter-spacing: -0.02em; }
-.fallback p { color: #d8d2c3; font-size: 1.05rem; }
-.fallback-link { display: inline-block; margin-top: 0.5rem; padding: 0.6rem 1rem; border: 2px solid var(--paper); text-decoration: none; font-family: var(--font-mono); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; }
-.fallback-link:hover, .fallback-link:focus-visible { background: var(--paper); color: var(--ink); }
+.fallback p { color: var(--muted); font-size: 1.05rem; }
+.fallback-link { display: inline-block; margin-top: 0.5rem; padding: 0.6rem 1rem; border: 2px solid var(--ink); text-decoration: none; font-family: var(--font-mono); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.fallback-link:hover, .fallback-link:focus-visible { background: var(--ink); color: var(--paper); }
 
 /* ---------- Room (only once JS has built it) ---------- */
 .stage, #tray { display: none; }
@@ -57,7 +56,7 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
   --s: 4;
   position: relative; isolation: isolate; /* sprite z-indexes stay inside the room */
   width: calc(240px * var(--s)); height: calc(135px * var(--s));
-  background: var(--night-2); box-shadow: 0 0 0 4px var(--night-2), 0 12px 0 4px rgba(0, 0, 0, 0.25);
+  background: var(--paper); box-shadow: 0 0 0 3px var(--ink), 0 14px 28px rgba(31, 42, 34, 0.18);
   overflow: hidden;
 }
 #room > * {
@@ -213,7 +212,7 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
 }
 
 /* ---------- phone object tray ---------- */
-.tray-head { margin: 0 0 0.5rem; font: 600 0.72rem var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: #d8d2c3; }
+.tray-head { margin: 0 0 0.5rem; font: 600 0.72rem var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .tray-grid { display: grid; gap: 0.5rem; }
 .tray-btn {
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem;
@@ -254,6 +253,18 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
 
 /* ---------- window, pager buzz ---------- */
 #room > .win { background: none; }
+
+/* ---------- whiteboard numbers (desktop; the panel carries the same facts) ---------- */
+.board-overlay {
+  position: absolute; left: calc(var(--s) * 1px); top: calc(var(--s) * 1px);
+  width: calc(var(--s) * 50px); height: calc(var(--s) * 29px);
+  padding: calc(var(--s) * 1.5px) calc(var(--s) * 2.5px); background: #f4f2ee; overflow: hidden; pointer-events: none;
+  font: 600 calc(var(--s) * 3.7px)/1.45 var(--font-mono); color: #1f4e8a; text-align: left;
+}
+.board-title { display: block; margin-bottom: calc(var(--s) * 0.5px); font-size: calc(var(--s) * 2.6px); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.board-line { display: block; white-space: nowrap; }
+.board-line:nth-of-type(even) { color: var(--rust-text); }
+html.is-phone .board-overlay { display: none; }
 .obj.is-buzzing { animation: buzz 0.24s steps(2) infinite; }
 @keyframes buzz {
   from { transform: translateX(calc(var(--s) * -0.6px)); }

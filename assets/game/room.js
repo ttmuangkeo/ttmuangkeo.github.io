@@ -172,7 +172,7 @@ function createProgress(scene) {
   };
 }
 
-// Phone object tray: 8 big icon buttons under the room that work exactly like tapping the object.
+// Phone object tray: one big icon button per object, working exactly like tapping the object.
 function buildTray(scene) {
   const tray = doc.getElementById('tray');
   const head = doc.createElement('p');
@@ -465,6 +465,31 @@ function buildRoom(room) {
   return { buttons, tip, decor, tipAt, tipFor, hideTip: hide };
 }
 
+// ---------- the whiteboard: the four headline numbers, read from the story page ----------
+// Desktop only (CSS hides it on phones). aria-hidden: the whiteboard's panel says the same thing.
+// If the story can't load, the board keeps its sketched lines and nothing is shown.
+function createBoard(scene) {
+  const btn = scene.buttons.find((b) => b.dataset.object === 'whiteboard');
+  if (!btn) return;
+  loadStory().then((story) => {
+    const lines = [...story.querySelectorAll('#features .numbers li[data-board]')].map((li) => li.dataset.board.trim()).filter(Boolean);
+    if (!lines.length) return;
+    const board = doc.createElement('span');
+    board.className = 'board-overlay';
+    board.setAttribute('aria-hidden', 'true');
+    const title = doc.createElement('span');
+    title.className = 'board-title';
+    title.textContent = 'By the numbers';
+    board.append(title, ...lines.slice(0, 4).map((text) => {
+      const line = doc.createElement('span');
+      line.className = 'board-line';
+      line.textContent = text;
+      return line;
+    }));
+    btn.append(board);
+  }).catch(() => {});
+}
+
 // ---------- the window: Seattle's real time of day, rain now and then, a secret aurora ----------
 function createWindow(room, scene) {
   const canvas = doc.createElement('canvas');
@@ -661,6 +686,7 @@ export function init() {
     scene.progress = createProgress(scene);
     setupHudMenu();
     scene.sky = createWindow(room, scene);
+    createBoard(scene);
     scene.pager = setupPager(room, scene);
     const pagerBtn = scene.buttons.find((b) => b.dataset.object === 'pager');
     const rackBtn = scene.buttons.find((b) => b.dataset.object === 'rack');
@@ -742,6 +768,9 @@ export function init() {
     const mug = scene.decor.mug;
     const rackFrames = SPRITES.rack.frames.map((f) => paintSprite(f));
     const rackCanvas = rackBtn?.querySelector('canvas');
+    const laptopBtn = scene.buttons.find((b) => b.dataset.object === 'laptop');
+    const plantFrames = SPRITES.plant.frames.map((f) => paintSprite(f));
+    const plant = scene.decor.plant;
     let tick = 0;
     setInterval(() => {
       if (document.hidden || reducedMotion() || scene.panels.isOpen()) return;
@@ -750,6 +779,8 @@ export function init() {
       scene.pager.tick(tick);
       if (rackCanvas) { const r = rackCanvas.getContext('2d'); r.clearRect(0, 0, rackCanvas.width, rackCanvas.height); r.drawImage(rackFrames[tick % 2], 0, 0); }
       if (mug) { const m = mug.getContext('2d'); m.clearRect(0, 0, mug.width, mug.height); m.drawImage(steamFrames[tick % 2], 0, 0); }
+      if (tick % 2 === 0 && !tim.walking) paintFrame(laptopBtn, SPRITES.laptop, (tick / 2) % SPRITES.laptop.frames.length); // code scrolls, graphs move
+      if (plant && tick % 3 === 0) { const p = plant.getContext('2d'); p.clearRect(0, 0, plant.width, plant.height); p.drawImage(plantFrames[(tick / 3) % 2], 0, 0); }
       if (tim.walking) return;
       if (tim.pose === 'idle') tim.show('tim_idle_down', tick % 2);
       if (performance.now() - tim.lastAction > 12000) {
