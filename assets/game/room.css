@@ -159,7 +159,7 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
 .panel-body .btn--ink { background: var(--ink); color: var(--paper); }
 .panel-loading { color: var(--muted); font-family: var(--font-mono); }
 /* story pieces inside panels */
-.panel-body .hero-meta, .panel-body .stop-meta, .panel-body .feature-metric, .panel-body .integrations-title,
+.panel-body .hero-meta, .panel-body .stop-meta, .panel-body .feature-metric, .panel-body .toolkit-title, .panel-body .clients-title,
 .panel-body .worked-at-label, .panel-body .stop-org, .panel-body .entry-ver {
   font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--rust-text);
 }
@@ -173,11 +173,19 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
 .panel-body .stop-photo, .panel-body figure { margin: 0; border: 2px solid var(--ink); }
 .panel-body .logo-mark { height: 1.1rem; width: auto; filter: brightness(0); opacity: 0.8; }
 .panel-body .worked-at .logo-mark { height: 1.5rem; }
-.panel-body .worked-at, .panel-body .integrations, .panel-body .basecamp-list { list-style: none; padding: 0; margin: 0.4rem 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: center; }
+.panel-body .worked-at, .panel-body .basecamp-list { list-style: none; padding: 0; margin: 0.4rem 0 0; display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: center; }
 .panel-body .basecamp-list { display: block; }
 .panel-body .basecamp-list li { padding-left: 1rem; position: relative; }
 .panel-body .basecamp-list li::before { content: "▸"; position: absolute; left: 0; color: var(--rust); }
-.panel-body .integrations li { padding: 0.15rem 0.45rem; border: 1px solid var(--ink); font: 0.72rem var(--font-mono); }
+.panel-body .numbers, .panel-body .clients-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.panel-body .numbers li { display: flex; flex-direction: column; padding: 0.55rem 0.8rem; border: 2px solid var(--ink); background: #f6f1e4; }
+.panel-body .numbers .number { font-size: 1.5rem; font-weight: 700; line-height: 1.1; color: var(--rust-text); }
+.panel-body .numbers span { color: var(--muted); }
+.panel-body .toolkit-groups { margin: 0; display: grid; gap: 0.5rem; }
+.panel-body .toolkit-groups dt { font: 600 0.72rem var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--rust-text); }
+.panel-body .toolkit-groups dd { margin: 0.1rem 0 0; }
+.panel-body .toolkit-built, .panel-body .clients-list li { color: var(--muted); }
+.panel-body .clients-list strong { color: var(--ink); }
 .panel-body .feature { padding: 0.75rem 0.9rem; border: 2px solid var(--ink); background: #f6f1e4; }
 .panel-body .entry { border-top: 2px solid var(--ink); padding: 0.5rem 0; }
 .panel-body .entry summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 0.4rem 0.6rem; align-items: baseline; }

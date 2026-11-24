@@ -356,9 +356,12 @@ def test_route_stops():
         problems.append("goodleap lacks stop--detour")
     if "stop--here" not in classes.get("moxi-swe", []):
         problems.append("moxi-swe lacks stop--here")
-    for phrase in ("4-month contract", "you are here"):
+    for phrase in ("4-month contract",):
         if phrase not in text:
             problems.append(f"route text missing '{phrase}'")
+    for phrase in ("you are here", "present"):
+        if phrase in text:
+            problems.append(f"route text still says '{phrase}' (quiet end date)")
     check("route_stops", not problems, "; ".join(problems))
 
 
@@ -408,34 +411,27 @@ def test_features():
     idx = parse_index()
     elems = idx.scope_elems.get("features", [])
     cards = [a for _, a in elems if "feature" in a.get("class", "").split()]
-    lis = []
-    in_int = False
-    # integrations <li> count: li elements following the .integrations <ul>
-    for tag, a in elems:
-        if tag == "ul":
-            in_int = "integrations" in a.get("class", "").split()
-        elif tag == "li" and in_int:
-            lis.append(a)
+    groups = [a for tag, a in elems if tag == "dt"]
     text = " ".join(idx.scope_text.get("features", "").split())
     problems = []
     if len(cards) != 4:
         problems.append(f"{len(cards)} .feature cards, want 4")
     if idx.scope_h3.get("features", []) != FEATURE_TITLES:
         problems.append(f"h3 texts {idx.scope_h3.get('features', [])}")
-    for phrase in ("95%", "zero data loss", "Atlassian MCP", "24 hours", "1\u20132 hours"):
+    for phrase in ("500K+", "zero data loss", "Atlassian MCP", "24 hours", "1\u20132 hours"):
         if phrase not in text:
             problems.append(f"missing '{phrase}'")
-    if len(lis) < 12:
-        problems.append(f"{len(lis)} integrations li, want >= 12")
+    if len(groups) < 6:
+        problems.append(f"{len(groups)} toolkit groups (dt), want >= 6")
     check("features", not problems, "; ".join(problems))
 
 
 TIMELINE = [
-    ("Software Engineer", "MoxiWorks", "2024 \u2013 Present"),
-    ("Senior Application Support Engineer", "MoxiWorks", "Mar 2022 \u2013 2024"),
-    ("Software Support Engineer", "GoodLeap", "2021 \u2013 Mar 2022"),
-    ("Application Support Engineer", "MoxiWorks", "Mar 2018 \u2013 2021"),
-    ("Web Developer", "Penwizard", "2017 \u2013 2018"),
+    ("Software Engineer", "MoxiWorks", "Jun 2024 \u2013 Nov 2026"),
+    ("Senior Application Support Engineer", "MoxiWorks", "Mar 2022 \u2013 Jun 2024"),
+    ("Software Support Engineer", "GoodLeap", "Jun 2021 \u2013 Mar 2022"),
+    ("Application Support Engineer", "MoxiWorks", "Dec 2018 \u2013 Jun 2021"),
+    ("Web Developer", "Penwizard", "2018"),
     ("Junior Web Developer (contract)", "Mercutio", "2017"),
     ("Software Engineering Immersive", "General Assembly", None),
 ]
@@ -539,9 +535,9 @@ def test_route_years():
     html = load_story()
     m = re.search(r'<section id="route".*?</section>', html, re.S)
     sec = m.group(0) if m else ""
-    want = {"uaa": "2012\u20132017", "mercutio": "2017", "penwizard": "2017\u20132018",
-            "moxi-support": "Mar 2018\u20132021", "goodleap": "2021\u2013Mar 2022",
-            "moxi-senior": "Mar 2022\u20132024", "moxi-swe": "2024\u2013Present"}
+    want = {"uaa": "2012\u20132017", "mercutio": "2017", "penwizard": "2018",
+            "moxi-support": "Dec 2018\u2013Jun 2021", "goodleap": "Jun 2021\u2013Mar 2022",
+            "moxi-senior": "Mar 2022\u2013Jun 2024", "moxi-swe": "Jun 2024\u2013Nov 2026"}
     problems = []
     blocks = {}
     for b in re.finditer(r'<li class="stop[^"]*" data-stop="([^"]+)">(.*?)</li>', sec, re.S):
@@ -783,6 +779,52 @@ def test_canonical_tags():
         if f'<link rel="canonical" href="{url}">' not in html:
             problems.append(f"{name} lacks canonical {url}")
     check("canonical_tags", not problems, "; ".join(problems))
+
+
+def test_resume_facts():
+    """Story copy agrees with the 2026-11-23 resumes (dates, numbers, quiet end date)."""
+    raw = load_story()
+    text = " ".join(re.sub(r"<[^>]+>", " ", raw).split()).lower()
+    problems = []
+    for phrase in ("8+ yrs", "jun 2024", "nov 2026", "dec 2018", "500k+", "~400", "800+", "~200",
+                   "10 production code fixes", "windermere", "berkshire hathaway", "howard hanna"):
+        if phrase not in text:
+            problems.append(f"missing {phrase!r}")
+    if "8 recoveries" not in text and "8 data recoveries" not in text:
+        problems.append("missing the 8 data recoveries")
+    for phrase in ("owned bugs end to end", "owned bug tickets end-to-end", "7+ yrs",
+                   "google workspace \u2192 microsoft graph"):
+        if phrase in text:
+            problems.append(f"still says {phrase!r}")
+    if re.search(r'class="tag">\s*Latest', raw):
+        problems.append("log still tags a role as Latest")
+    if "not yet confirmed" in raw or "unconfirmed assumption" in raw:
+        problems.append("Mercutio 'unconfirmed' comments remain")
+    check("resume_facts", not problems, "; ".join(problems))
+
+
+def test_new_blocks():
+    """The office's new objects read these story blocks."""
+    idx = parse_index()
+    feats = idx.scope_elems.get("features", [])
+    log = idx.scope_elems.get("log", [])
+    has = lambda elems, cls: any(cls in a.get("class", "").split() for _, a in elems)
+    problems = []
+    in_numbers, boards = False, []
+    for tag, a in feats:
+        if tag == "ul":
+            in_numbers = "numbers" in a.get("class", "").split()
+        elif tag == "li" and in_numbers:
+            boards.append(a.get("data-board", ""))
+    if len(boards) != 4 or not all(b.strip() for b in boards):
+        problems.append(f".numbers needs 4 li with data-board, got {boards}")
+    if not has(feats, "toolkit"):
+        problems.append("no .toolkit in #features")
+    if not has(log, "clients"):
+        problems.append("no .clients in #log")
+    if has(feats, "integrations-wrap"):
+        problems.append(".integrations-wrap should be gone")
+    check("new_blocks", not problems, "; ".join(problems))
 
 
 def main():

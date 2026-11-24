@@ -16,7 +16,7 @@ export const PANELS = {
   laptop: {
     title: 'What I do now',
     story: '#features',
-    pick: ['#trailhead .hero-meta', '#features .feature:nth-of-type(3)', '#features .feature:nth-of-type(4)', '#features .integrations-wrap'],
+    pick: ['#trailhead .hero-meta', '#features .feature:nth-of-type(3)', '#features .feature:nth-of-type(4)'],
   },
   pager: {
     title: 'Incident log',
