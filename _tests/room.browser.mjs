@@ -36,7 +36,7 @@ await send('Runtime.enable'); await send('Page.enable');
 let injected = null;
 async function open({ w = 1280, h = 800, mobile = false, before = '' } = {}) {
   if (injected) await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: injected });
-  injected = (await send('Page.addScriptToEvaluateOnNewDocument', { source: `try { localStorage.clear(); } catch {} ${before}` })).identifier;
+  injected = (await send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__errs = []; addEventListener('error', (e) => window.__errs.push(String(e.message))); addEventListener('unhandledrejection', (e) => window.__errs.push(String(e.reason))); try { localStorage.clear(); } catch {} ${before}` })).identifier;
   await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
   await send('Page.navigate', { url: 'about:blank' }); await sleep(150);
   await send('Page.navigate', { url: BASE }); await sleep(1500);
@@ -118,7 +118,7 @@ await scenario('phones show the role in the HUD', async () => {
 });
 
 await scenario('completion bubble message is fully visible on phones', async () => {
-  await open({ w: 375, h: 812, mobile: true, before: `try { localStorage.setItem('tim-room-found', JSON.stringify(['pennant','map','laptop','pager','logbook','keys','camera'])); } catch {}` });
+  await open({ w: 375, h: 812, mobile: true, before: `try { localStorage.setItem('tim-room-found', JSON.stringify(['pennant','map','laptop','pager','logbook','keys','camera','rack'])); } catch {}` });
   // the injected clear() runs first, then our setItem
   await ev(`document.querySelector('.tray-btn[data-object="mailbox"]').click()`); await sleep(2600);
   await ev(`document.getElementById('panel').close()`); await sleep(300);
@@ -192,6 +192,59 @@ await scenario('the pager goes off once per visit and Triage it opens the game',
   if (!(p.open && p.obj === 'incident')) return `Triage it opened ${JSON.stringify(p)}`;
   await open({ before: fast });
   return (await ev(`!!document.querySelector('#room .bubble--pager')`)) ? 'pager buzzed again in the same visit' : '';
+});
+
+await scenario('the server rack runs the EWS to Graph cutover while the agent view stays put', async () => {
+  await reduceMotion(true);
+  try {
+    await open();
+    await ev(`document.querySelector('[data-object="rack"]').click()`); await sleep(1800);
+    if ((await panel()).obj !== 'rack') return `rack panel did not open: ${JSON.stringify(await panel())}`;
+    const sees = () => ev(`[...document.querySelectorAll('#panel .mig-sees li')].map((li) => li.textContent)`);
+    const before = await sees();
+    const first = await ev(`document.querySelector('#panel .mig-id').textContent`);
+    if (!/[+/]/.test(first)) return `ids do not start in EWS form: ${first}`;
+    for (let i = 0; i < 6; i++) {
+      const mid = await sees();
+      if (i < 5 && JSON.stringify(mid) !== JSON.stringify(before)) return `agent view changed before stage ${i + 1}`;
+      if (i === 3 && (await ev(`document.querySelector('#panel .mig-pill').textContent`)) !== 'sync=false') return 'sync was not paused before the transform';
+      await ev(`document.querySelector('#panel .mig-go').focus(); document.querySelector('#panel .mig-go').click()`); await sleep(300);
+    }
+    const r = await ev(`(() => { const d = document.getElementById('panel'); return { ids: [...d.querySelectorAll('.mig-id')].map((c) => c.textContent), pill: d.querySelector('.mig-pill').textContent, done: !d.querySelector('.mig-result').hidden, focus: d.contains(document.activeElement) }; })()`);
+    if (r.ids.some((x) => /[+/]/.test(x)) || r.pill !== 'sync=true' || !r.done || !r.focus) return `cutover incomplete: ${JSON.stringify(r)}`;
+    const after = await sees();
+    if (after.length !== before.length + 1 || JSON.stringify(after.slice(0, before.length)) !== JSON.stringify(before)) return `agent view changed: ${JSON.stringify(after)}`;
+    if (!(await ev(`document.querySelector('[data-object="rack"]').classList.contains('is-found')`))) return 'rack not marked found';
+    await ev(`[...document.querySelectorAll('#panel .inc-actions button')].find((b) => b.textContent === 'Run it again').click()`); await sleep(200);
+    const reset = await ev(`({ id: document.querySelector('#panel .mig-id').textContent, n: document.querySelectorAll('#panel .mig-sees li').length })`);
+    if (reset.id !== first || reset.n !== before.length) return `Run it again did not reset: ${JSON.stringify(reset)}`;
+    await ev(`document.getElementById('panel').close()`); await sleep(200);
+    await ev(`document.querySelector('[data-object="rack"]').click()`); await sleep(1800);
+    for (let i = 0; i < 6; i++) { await ev(`document.querySelector('#panel .mig-go').click()`); await sleep(250); }
+    await ev(`[...document.querySelectorAll('#panel .inc-actions button')].find((b) => b.textContent === 'Get in touch').click()`); await sleep(500);
+    const p = await panel();
+    return p.open && p.obj === 'mailbox' ? '' : `Get in touch opened ${JSON.stringify(p)}`;
+  } finally { await reduceMotion(false); }
+});
+
+await scenario('closing the rack mid-run stops it cleanly, and the Incident log links to it', async () => {
+  await open();
+  await ev(`document.querySelector('[data-object="pager"]').click()`); await sleep(1800);
+  const btn = await ev(`[...document.querySelectorAll('#panel .inc-callout button')].map((b) => b.textContent)`);
+  if (!btn.includes('▶ Run the cutover')) return `no cutover callout: ${JSON.stringify(btn)}`;
+  await ev(`[...document.querySelectorAll('#panel .inc-callout button')].find((b) => b.textContent === '▶ Run the cutover').click()`); await sleep(300);
+  if ((await panel()).obj !== 'rack') return 'callout did not open the rack panel';
+  await ev(`document.querySelector('#panel .mig-go').click()`); await sleep(150);
+  await key('Escape', 27); await sleep(1500);
+  const errs = await ev(`window.__errs || []`);
+  const p = await panel();
+  return !p.open && !errs.length ? '' : `after close: ${JSON.stringify({ p, errs })}`;
+});
+
+await scenario('the counter and tray count every object', async () => {
+  await open({ w: 375, h: 812, mobile: true });
+  const r = await ev(`({ hud: document.querySelector('.hud-found').textContent.replace(/\\s+/g, ' ').trim(), tray: document.querySelector('.tray-head').textContent, buttons: document.querySelectorAll('.tray-btn').length, cols: getComputedStyle(document.querySelector('.tray-grid')).gridTemplateColumns.split(' ').length, scroll: document.documentElement.scrollWidth > innerWidth })`);
+  return r.hud === 'Found 0/9' && r.tray.endsWith('0/9') && r.buttons === 9 && r.cols === 3 && !r.scroll ? '' : JSON.stringify(r);
 });
 
 ws.close(); cleanup();

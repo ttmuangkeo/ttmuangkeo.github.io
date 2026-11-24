@@ -190,6 +190,19 @@ function drawMailbox(open) {
   else { rect(g, 9, 0, 2, 4, 'y'); }
   return frame(g);
 }
+function drawRack(f) {             // server rack: four units with blinking status lights
+  const g = grid(14, 24);
+  box(g, 0, 0, 14, 22, 'c');
+  rect(g, 1, 22, 2, 2, 'k'); rect(g, 11, 22, 2, 2, 'k');         // feet
+  [2, 7, 12, 17].forEach((y, i) => {
+    box(g, 1, y, 12, 4, 'C', 'k');
+    rect(g, 2, y + 1, 6, 1, 'm'); rect(g, 2, y + 2, 4, 1, 'm');    // vents
+    const on = (i + f) % 2 === 0;
+    px(g, 10, y + 1, on ? 'e' : 'E'); px(g, 11, y + 1, on ? 'E' : 'e');
+    px(g, 10, y + 2, i === 1 ? (f ? 'y' : 'j') : 'E');
+  });
+  return frame(g);
+}
 function drawRug() {
   const g = grid(44, 18);
   box(g, 0, 0, 44, 18, 'o', 'R');
@@ -239,6 +252,7 @@ const LOGBOOK = drawLogbook(false);
 const KEYS = drawKeys(false);
 const CAMERA = drawCamera(false);
 const MAILBOX = drawMailbox(false);
+const RACK = drawRack(0);
 
 export const SPRITES = {
   room: sheet(160, 100, [drawRoom()]),
@@ -253,6 +267,7 @@ export const SPRITES = {
   keys: sheet(8, 10, [KEYS, drawKeys(true)]),
   camera: sheet(16, 13, [CAMERA, drawCamera(true)]),
   mailbox: sheet(12, 22, [MAILBOX, drawMailbox(true)]),
+  rack: sheet(14, 24, [RACK, drawRack(1)]),
   rug: sheet(44, 18, [drawRug()]),
 
   tim_idle_down: sheet(10, 20, [tim(HEAD_DOWN, BODY, HIPS, LEGS.stand), tim(HEAD_DOWN, BREATHE, HIPS, LEGS.stand)]),
@@ -270,6 +285,7 @@ export const SPRITES = {
   icon_logbook: icon((g) => { box(g, 3, 1, 10, 14, 'R'); rect(g, 3, 1, 2, 14, 'k'); rect(g, 7, 4, 4, 1, 'y'); rect(g, 7, 6, 3, 1, 'y'); }),
   icon_keys: icon((g) => { rect(g, 7, 0, 2, 3, 'l'); box(g, 4, 3, 8, 7, 'm', 'C'); px(g, 7, 6, 'r'); rect(g, 7, 10, 2, 5, 'l'); px(g, 9, 13, 'l'); px(g, 9, 11, 'l'); }),
   icon_camera: icon((g) => fit(CAMERA, g, 0, 2)),
+  icon_rack: icon((g) => { box(g, 2, 0, 12, 16, 'c'); [2, 6, 10].forEach((y) => { box(g, 3, y, 10, 3, 'C', 'k'); rect(g, 4, y + 1, 4, 1, 'm'); px(g, 10, y + 1, 'e'); px(g, 11, y + 1, y === 6 ? 'y' : 'E'); }); }),
   icon_mailbox: icon((g) => { box(g, 1, 3, 14, 8, 'o', 'R'); rect(g, 2, 4, 12, 1, 'r'); rect(g, 12, 1, 2, 5, 'y'); rect(g, 7, 11, 2, 5, 'k'); }),
 };
 // window_<phase> and window_<phase>_rain (no rain under the aurora), two frames each

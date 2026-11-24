@@ -8,6 +8,7 @@ import { createFoundState } from './state.js';
 import { KEY_DIRS, KONAMI, nextCell, objectInReach, createSequence } from './controls.js';
 import { skyNow } from './sky.js';
 import { createIncidentPanel } from './incident.js';
+import { createMigrationPanel } from './migration.js';
 
 // ---------- panels: content comes from the story page, never duplicated here ----------
 let storyPromise = null;
@@ -151,7 +152,12 @@ function createProgress(scene) {
   const found = createFoundState(storage);
   const counter = doc.querySelector('.hud-found');
   const render = () => {
-    if (counter) { counter.hidden = false; counter.querySelector('.hud-count').textContent = String(found.count()); }
+    if (counter) {
+      counter.hidden = false;
+      counter.querySelector('.hud-count').textContent = String(found.count());
+      const total = counter.querySelector('.hud-total');
+      if (total) total.textContent = String(OBJECTS.length);
+    }
     for (const b of scene.buttons) b.classList.toggle('is-found', found.isFound(b.dataset.object));
     scene.onProgress?.(found);
   };
@@ -171,7 +177,7 @@ function buildTray(scene) {
   const tray = doc.getElementById('tray');
   const head = doc.createElement('p');
   head.className = 'tray-head';
-  head.innerHTML = 'Tap something · Found <span class="tray-count">0</span>/8';
+  head.innerHTML = `Tap something · Found <span class="tray-count">0</span>/${OBJECTS.length}`;
   const grid = doc.createElement('div');
   grid.className = 'tray-grid';
   const buttons = OBJECTS.map((o) => {
@@ -355,15 +361,10 @@ async function useObject(tim, scene, id) {
   const walk = tim.walkId;               // any newer walk or panel change bumps this
   const stillMine = () => walk === tim.walkId;
   const btn = scene.buttons.find((b) => b.dataset.object === id);
-  const sprite = SPRITES[o.sprite];
-  const objCanvas = btn.querySelector('canvas');
-  const setObjFrame = (i) => {
-    const c = paintSprite(sprite.frames[Math.min(i, sprite.frames.length - 1)]);
-    objCanvas.getContext('2d').clearRect(0, 0, objCanvas.width, objCanvas.height);
-    objCanvas.getContext('2d').drawImage(c, 0, 0);
-  };
+  const setObjFrame = (i) => paintFrame(btn, SPRITES[o.sprite], i);
+  const pose = { left: 'tim_walk_left', right: 'tim_walk_right' }[o.face] ?? 'tim_use';
   if (reducedMotion()) {
-    tim.show(o.face === 'left' ? 'tim_walk_left' : 'tim_use');
+    tim.show(pose);
     return stillMine();
   }
   if (o.anim === 'photo') {
@@ -376,13 +377,13 @@ async function useObject(tim, scene, id) {
   }
   const steps = 4;
   for (let i = 0; i < steps; i++) {
-    tim.show(o.face === 'left' ? 'tim_walk_left' : 'tim_use', i);
+    tim.show(pose, i);
     setObjFrame(i % 2);
     await sleep(USE_MS / steps);
     if (!stillMine()) { setObjFrame(0); return false; }
   }
   setObjFrame(0);
-  tim.show(o.face === 'left' ? 'tim_walk_left' : 'tim_use', 0);
+  tim.show(pose, 0);
   return stillMine();
 }
 
@@ -393,6 +394,15 @@ function place(el, x, y, w, h) {
   el.style.setProperty('--w', w);
   el.style.setProperty('--h', h);
   el.style.zIndex = String(10 + y + h); // deeper on screen = drawn in front
+}
+
+// Redraws an object button's sprite at a given frame (idle blinks, use animations).
+function paintFrame(btn, sprite, i) {
+  const canvas = btn?.querySelector('canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(paintSprite(sprite.frames[Math.min(i, sprite.frames.length - 1)]), 0, 0);
 }
 
 function spriteCanvas(key, frame = 0) {
@@ -652,20 +662,28 @@ export function init() {
     scene.sky = createWindow(room, scene);
     scene.pager = setupPager(room, scene);
     const pagerBtn = scene.buttons.find((b) => b.dataset.object === 'pager');
+    const rackBtn = scene.buttons.find((b) => b.dataset.object === 'rack');
     scene.extraPanels = {
       incident: createIncidentPanel({ onContact: () => scene.panels.open('mailbox', pagerBtn, { replace: true }) }),
+      rack: createMigrationPanel({ onContact: () => scene.panels.open('mailbox', rackBtn, { replace: true }) }),
     };
-    // The pager's Incident log panel gets a way into the triage mini-game.
-    scene.decoratePanel = (id, body) => {
-      if (id !== 'pager') return;
+    // The pager's Incident log panel gets a way into both mini-games (triage, and the migration it describes).
+    const callout = (html, label, panel, from) => {
       const box = doc.createElement('div');
       box.className = 'inc-callout';
-      box.innerHTML = '<p><strong>See it work.</strong> Run a simulated ticket through my Claude triage skill.</p>';
+      box.innerHTML = html;
       const go = doc.createElement('button');
-      go.type = 'button'; go.className = 'bubble-btn bubble-btn--ink'; go.textContent = '▶ Triage a ticket';
-      go.addEventListener('click', () => scene.panels.open('incident', pagerBtn, { replace: true }));
+      go.type = 'button'; go.className = 'bubble-btn bubble-btn--ink'; go.textContent = label;
+      go.addEventListener('click', () => scene.panels.open(panel, from, { replace: true }));
       box.append(go);
-      body.prepend(box);
+      return box;
+    };
+    scene.decoratePanel = (id, body) => {
+      if (id !== 'pager') return;
+      body.prepend(
+        callout('<p><strong>See it work.</strong> Run a simulated ticket through my Claude triage skill.</p>', '▶ Triage a ticket', 'incident', pagerBtn),
+        callout('<p><strong>Run the migration.</strong> Move a mailbox from EWS to Microsoft Graph without the user noticing.</p>', '▶ Run the cutover', 'rack', rackBtn),
+      );
     };
     setupKeyboard(scene);
     let pendingCelebration = false;
@@ -721,12 +739,15 @@ export function init() {
     // tab is hidden, a panel is open, Tim is busy, or the visitor prefers reduced motion.
     const steamFrames = SPRITES.mug.frames.map((f) => paintSprite(f));
     const mug = scene.decor.mug;
+    const rackFrames = SPRITES.rack.frames.map((f) => paintSprite(f));
+    const rackCanvas = rackBtn?.querySelector('canvas');
     let tick = 0;
     setInterval(() => {
       if (document.hidden || reducedMotion() || scene.panels.isOpen()) return;
       tick++;
       scene.sky.tick(tick);
       scene.pager.tick(tick);
+      if (rackCanvas) { const r = rackCanvas.getContext('2d'); r.clearRect(0, 0, rackCanvas.width, rackCanvas.height); r.drawImage(rackFrames[tick % 2], 0, 0); }
       if (mug) { const m = mug.getContext('2d'); m.clearRect(0, 0, mug.width, mug.height); m.drawImage(steamFrames[tick % 2], 0, 0); }
       if (tim.walking) return;
       if (tim.pose === 'idle') tim.show('tim_idle_down', tick % 2);

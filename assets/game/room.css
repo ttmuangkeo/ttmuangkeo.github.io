@@ -223,7 +223,7 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
 @media (max-width: 640px) {
   html.game-ready .stage { padding: 0; }
   html.game-ready #tray { display: block; padding: 0.9rem 0.75rem 1.5rem; }
-  .tray-grid { grid-template-columns: repeat(4, 1fr); }
+  .tray-grid { grid-template-columns: repeat(3, 1fr); }
   .tray-btn { min-height: 64px; }
   html.game-ready .hud { flex-wrap: wrap; padding: 0.5rem 0.75rem; }
   html.game-ready .hud-found, html.game-ready .hud-sep { display: none; }
@@ -288,3 +288,58 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
 .inc-foot { color: var(--muted); font-size: 0.9rem; }
 .inc-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 @media (prefers-reduced-motion: reduce) { .inc-bar-fill { transition: none; } }
+
+/* ---------- server rack mini-game: the EWS -> Graph cutover ---------- */
+.mig-account {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.4rem 1rem;
+  padding: 0.55rem 0.8rem; border: 2px solid var(--ink); background: #fffdf7;
+  font: 600 0.75rem var(--font-mono); letter-spacing: 0.04em;
+}
+.mig-pill { padding: 0.15rem 0.5rem; border: 2px solid var(--ink); font: 600 0.72rem var(--font-mono); background: #6fd38a; color: var(--ink); }
+.mig-pill[data-sync="off"] { background: #f2d34b; }
+.mig-steps {
+  display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.8rem 0 0 !important; padding: 0; list-style: none; counter-reset: mig;
+  font: 600 0.66rem var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em;
+}
+.mig-steps li { counter-increment: mig; padding: 0.2rem 0.45rem; border: 2px solid var(--ink); background: var(--paper); opacity: 0.55; }
+.mig-steps li::before { content: counter(mig) " · "; }
+.mig-steps li[data-state="now"] { opacity: 1; background: var(--ink); color: var(--paper); }
+.mig-steps li[data-state="done"] { opacity: 1; }
+.mig-steps li[data-state="done"]::before { content: "✓ "; color: var(--rust-text); }
+.mig-go-row { /* the next-stage button stays in reach while you read the log and Sam's view */
+  position: sticky; bottom: -1.4rem; z-index: 1;
+  margin: 0.9rem -1.25rem -1.4rem !important; padding: 0.7rem 1.25rem 0.9rem; background: var(--paper); border-top: 2px solid var(--ink);
+}
+.mig-go { font-size: 0.8rem; padding: 0.55rem 0.9rem; }
+.mig-go[aria-disabled="true"] { opacity: 0.6; cursor: progress; }
+.mig-split { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 0.9rem; }
+.mig-side { display: flex; flex-direction: column; gap: 0.6rem; min-width: 0; }
+.mig-side h3 { margin: 0 !important; font: 600 0.72rem var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--rust-text); }
+.mig-log { height: 8.5rem; min-height: 0; overflow-y: auto; }
+.inc-tag--rule, .inc-tag--id { color: #f2d34b; }
+.inc-tag--check, .inc-tag--ok { color: #9fc6d6; }
+.inc-tag--perm, .inc-tag--graph { color: #f2a65a; }
+.mig-ids { width: 100%; border-collapse: collapse; font: 0.76rem var(--font-mono); }
+.mig-ids caption { text-align: left; padding-bottom: 0.25rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.mig-format { padding: 0 0.3rem; border: 1px solid var(--ink); }
+.mig-ids th { text-align: left; padding: 0.2rem 0.5rem 0.2rem 0; font-weight: 600; white-space: nowrap; }
+.mig-ids td { padding: 0.2rem 0; }
+.mig-id { overflow-wrap: anywhere; }
+.mig-id mark { background: #f2d34b; color: var(--ink); font-weight: 600; outline: 1px solid var(--ink); }
+.mig-app { border: 2px solid var(--ink); background: #fffdf7; box-shadow: 4px 4px 0 var(--ink); }
+.mig-sees { list-style: none; margin: 0; padding: 0; }
+.mig-sees li { display: grid; gap: 0.1rem; padding: 0.55rem 0.75rem; font-size: 0.9rem; }
+.mig-sees li + li { border-top: 1px solid #d8cdb3; }
+.mig-kind { font: 600 0.64rem var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.mig-sees li.is-new { background: #e8f6ea; animation: mig-in 0.5s steps(4); }
+.mig-sees li.is-new .mig-kind::after { content: " · new"; color: #2f7d4a; }
+@keyframes mig-in { from { opacity: 0; } to { opacity: 1; } }
+.mig-caption { color: var(--muted); font-size: 0.85rem; }
+@media (max-width: 640px) {
+  .mig-split { grid-template-columns: 1fr; }
+  .mig-steps { display: none; } /* the button already says "3 of 6" */
+  .mig-go { width: 100%; }
+  .mig-log { height: 7.5rem; }
+  .mig-sees li { padding: 0.4rem 0.65rem; font-size: 0.85rem; }
+}
+@media (prefers-reduced-motion: reduce) { .mig-sees li.is-new { animation: none; } }

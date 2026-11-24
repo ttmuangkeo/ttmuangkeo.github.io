@@ -1,6 +1,7 @@
 // The pager mini-game: a simulated Jira ticket run through the steps of Tim's real
 // Claude triage skill (read the ticket via the Atlassian MCP, score it, probe the repo).
 // Every ticket, file name and number here is made up, and the panel says so.
+import { h } from './dom.js';
 
 export const VERDICTS = { bug: 'Real bug', 'not-bug': 'Not a bug', 'needs-info': 'Needs more info' };
 
@@ -58,18 +59,6 @@ export const TICKETS = [
 ];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function h(doc, tag, props = {}, ...kids) {
-  const el = doc.createElement(tag);
-  for (const [k, v] of Object.entries(props)) {
-    if (k === 'class') el.className = v;
-    else if (k === 'text') el.textContent = v;
-    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
-    else el.setAttribute(k, v);
-  }
-  el.append(...kids);
-  return el;
-}
 
 // The panel definition the room's panel system renders (no story-page content).
 export function createIncidentPanel({ onContact, doc = globalThis.document, start = Math.floor(Math.random() * TICKETS.length) } = {}) {

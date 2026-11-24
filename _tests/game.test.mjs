@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PALETTE, SPRITES, validateSprite } from '../assets/game/sprites.js';
 
-const OBJECT_IDS = ['pennant', 'map', 'laptop', 'pager', 'logbook', 'keys', 'camera', 'mailbox'];
+const OBJECT_IDS = ['pennant', 'map', 'laptop', 'pager', 'logbook', 'keys', 'camera', 'rack', 'mailbox'];
+const GAME_PANELS = ['rack']; // objects whose panel is a mini-game, not story content
 const TIM_SHEETS = ['tim_idle_down', 'tim_walk_down', 'tim_walk_up', 'tim_walk_left', 'tim_walk_right', 'tim_use', 'tim_wave'];
 
 test('every sprite validates', () => {
@@ -60,7 +61,7 @@ test('palette keys are single characters with "." transparent', () => {
 import { OBJECTS, ROOM } from '../assets/game/objects.js';
 import { fitScale } from '../assets/game/grid.js';
 
-test('OBJECTS has the 8 ids in order', () => {
+test('OBJECTS has the 9 ids in order', () => {
   assert.deepEqual(OBJECTS.map((o) => o.id), OBJECT_IDS);
 });
 
@@ -150,10 +151,10 @@ test('walkSpeed keeps any walk at or under 1.2 seconds', () => {
 
 // ---------- Task 5: panels and found state ----------
 import { PANELS } from '../assets/game/panels.js';
-import { createFoundState } from '../assets/game/state.js';
+import { createFoundState, OBJECT_IDS as STATE_IDS } from '../assets/game/state.js';
 
-test('PANELS has all 8 ids with a title and selectors', () => {
-  assert.deepEqual(Object.keys(PANELS), OBJECT_IDS);
+test('PANELS covers every story object with a title and selectors', () => {
+  assert.deepEqual(Object.keys(PANELS), OBJECT_IDS.filter((id) => !GAME_PANELS.includes(id)));
   for (const [id, p] of Object.entries(PANELS)) {
     assert.ok(p.title && typeof p.title === 'string', `${id} title`);
     assert.ok(Array.isArray(p.pick) && p.pick.length > 0, `${id} pick`);
@@ -190,11 +191,11 @@ test('found-state survives throwing storage', () => {
   assert.equal(none.markFound('keys'), true);
 });
 
-test('allFound only after all 8, and ignores unknown ids', () => {
+test('allFound only after every object, and ignores unknown ids', () => {
   const s = createFoundState(memoryStorage());
   s.markFound('not-a-thing');
   assert.equal(s.count(), 0);
-  OBJECT_IDS.slice(0, 7).forEach((id) => s.markFound(id));
+  OBJECT_IDS.filter((id) => id !== 'mailbox').forEach((id) => s.markFound(id));
   assert.equal(s.allFound(), false);
   s.markFound('mailbox');
   assert.equal(s.allFound(), true);
@@ -274,4 +275,65 @@ test('triage tickets are complete and their scores match their verdicts', () => 
   const panel = createIncidentPanel({ doc: {} });
   assert.equal(typeof panel.render, 'function');
   assert.ok(panel.title && panel.story.startsWith('#'));
+});
+
+test('found-state ids come from OBJECTS', () => {
+  assert.deepEqual(STATE_IDS, OBJECTS.map((o) => o.id));
+});
+
+// ---------- the server rack: EWS -> Graph cutover ----------
+import { toGraphId, toEwsId, swappedAt, RECORDS, NEW_EVENT, STAGES, createMigrationPanel } from '../assets/game/migration.js';
+
+test('toGraphId swaps / for - and + for _, and nothing else', () => {
+  assert.equal(toGraphId('AA+b/C+d/='), 'AA_b-C_d-=');
+  assert.equal(toEwsId('AA_b-C_d-='), 'AA+b/C+d/=');
+  assert.equal(toGraphId('plainAAA='), 'plainAAA=');
+});
+
+test('every demo record has an EWS-style id that round-trips', () => {
+  assert.equal(RECORDS.length, 3);
+  for (const r of RECORDS) {
+    assert.match(r.ews, /\+/, `${r.label} needs a +`);
+    assert.match(r.ews, /\//, `${r.label} needs a /`);
+    assert.doesNotMatch(r.ews, /[-_]/, `${r.label} must not already look like Graph`);
+    const g = toGraphId(r.ews);
+    assert.doesNotMatch(g, /[+/]/, r.label);
+    assert.equal(toEwsId(g), r.ews, r.label);
+    assert.ok(r.kind && r.label && r.detail, r.label);
+  }
+  assert.doesNotMatch(NEW_EVENT.id, /[+/]/, 'the new event arrives with a Graph id');
+});
+
+test('swappedAt lists exactly the characters the transform changes', () => {
+  for (const r of RECORDS) {
+    const g = toGraphId(r.ews);
+    const diff = [...r.ews].flatMap((c, i) => (c === g[i] ? [] : [i]));
+    assert.deepEqual(swappedAt(r.ews), diff, r.label);
+    assert.ok(diff.length >= 2);
+  }
+});
+
+test('the cutover runs in six stages in the runbook order', () => {
+  assert.deepEqual(STAGES.map((s) => s.button),
+    ['Register the app', 'Grant permissions', 'Pause sync', 'Transform IDs', 'Check the IDs', 'Resume sync']);
+  for (const s of STAGES) assert.ok(s.lines.length >= 2 && s.lines.length <= 4, `${s.id} has 2-4 lines`);
+  const text = STAGES.flatMap((s) => s.lines.map(([, t]) => t)).join('\n');
+  for (const p of ['Contacts.ReadWrite', 'Calendars.ReadWrite', 'Mail.Send', 'sync=false', 'sync=true', 'client_id', 'tenant_id']) {
+    assert.ok(text.includes(p), `stage text mentions ${p}`);
+  }
+  assert.doesNotMatch(text, /[0-9a-f]{8}-[0-9a-f]{4}/i, 'no real-looking GUIDs');
+  const panel = createMigrationPanel({ doc: {} });
+  assert.equal(typeof panel.render, 'function');
+  assert.ok(panel.title && panel.story.startsWith('#'));
+});
+
+test('the rack stands on the floor clear of the mailbox, used from its left', () => {
+  const rack = OBJECTS.find((o) => o.id === 'rack');
+  assert.equal(rack.face, 'right');
+  const blocked = new Set(ROOM.blocked.map(([c, r]) => `${c},${r}`));
+  const s = SPRITES.rack;
+  const footCols = [Math.floor(rack.x / 8), Math.floor((rack.x + s.w - 1) / 8)];
+  for (const c of footCols) assert.ok(blocked.has(`${c},${Math.floor((rack.y + s.h - 1) / 8)}`), `rack foot col ${c} blocked`);
+  assert.equal(rack.useSpot.col, footCols[0] - 1);
+  assert.equal(SPRITES.rack.frames.length, 2, 'rack lights blink');
 });

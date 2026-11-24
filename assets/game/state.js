@@ -1,7 +1,9 @@
 // Which objects a visitor has found. Persists in localStorage when it can,
 // and quietly falls back to memory (private windows, blocked storage).
+import { OBJECTS } from './objects.js';
+
 const KEY = 'tim-room-found';
-export const OBJECT_IDS = ['pennant', 'map', 'laptop', 'pager', 'logbook', 'keys', 'camera', 'mailbox'];
+export const OBJECT_IDS = OBJECTS.map((o) => o.id);
 
 export function createFoundState(storage) {
   let found = new Set();
