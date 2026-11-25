@@ -62,7 +62,7 @@ export function createWorld(container, frame) {
   const { group: props, entries } = buildProps();
   scene.add(props);
 
-  let swing = 0, zoom = 1, dirty = true, last = 0, raf = 0, lost = false;
+  let swing = 0, zoom = 1, dirty = true, last = 0, raf = 0, lost = false, mark = null;
   const renderCbs = [];
   const ray = new THREE.Raycaster();
   const v = new THREE.Vector3();
@@ -157,6 +157,30 @@ export function createWorld(container, frame) {
       const key = hit?.object.userData.key;
       return OBJECT_IDS.has(key) ? key : null;
     },
+
+    // A small ring where a floor click sent Tim; it fades over 600 ms (shows still under reduced motion).
+    markFloor(cell) {
+      world.lastMark = { ...cell };
+      if (mark) scene.remove(mark);
+      const m = new THREE.Mesh(new THREE.RingGeometry(3, 5, 16), new THREE.MeshBasicMaterial({ color: 0xd9622b, transparent: true, depthWrite: false }));
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(cell.col * 8 + 4, 0.6, cell.row * 8 + 4);
+      m.userData.noPick = true;
+      mark = m;
+      scene.add(m);
+      world.invalidate();
+      const t0 = performance.now();
+      const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const fade = (now) => {
+        if (mark !== m) return;
+        const k = (now - t0) / 600;
+        if (k >= 1) { scene.remove(m); mark = null; world.invalidate(); return; }
+        if (!still) { m.material.opacity = 1 - k; m.scale.setScalar(1 + k * 0.4); world.invalidate(); }
+        requestAnimationFrame(fade);
+      };
+      requestAnimationFrame(fade);
+    },
+    lastMark: null,
 
     add(obj) { scene.add(obj); world.invalidate(); },
     onRender(cb) { renderCbs.push(cb); },

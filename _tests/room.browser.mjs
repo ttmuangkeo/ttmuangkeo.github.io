@@ -382,6 +382,65 @@ await scenario('hovering an object highlights its prop', async () => {
   return lit > before + 2 && Math.abs(after - before) < 1 ? '' : JSON.stringify({ before, lit, after });
 });
 
+// ---------- personality: camera swing, click marker, emotes ----------
+const rightDrag = async (x, y, dx) => {
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'right', buttons: 2, clickCount: 1 });
+  for (let i = 1; i <= 8; i++) await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x + (dx * i) / 8, y, button: 'right', buttons: 2 });
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x + dx, y, button: 'right', buttons: 0, clickCount: 1 });
+};
+const roomCentre = () => ev(`(() => { const r = document.getElementById('room').getBoundingClientRect(); return [r.left + r.width * 0.5, r.top + r.height * 0.8]; })()`);
+
+await scenario('right-drag swings the camera within its limits and it eases back', async () => {
+  await open();
+  const [x, y] = await roomCentre();
+  await rightDrag(x, y, -400);
+  await sleep(100);
+  const s0 = await ev(`${SCENE}.world.swing()`);
+  if (s0 !== -10) return `swing after drag ${s0}`;
+  await sleep(6000);
+  const s1 = await ev(`${SCENE}.world.swing()`);
+  return s1 === 0 ? '' : `swing after 6 s ${s1}`;
+});
+
+await scenario('tab focus after a swing shows the tip over the prop', async () => {
+  await open();
+  await ev(`${SCENE}.world.setSwing(20); ${SCENE}.world.renderNow(); const b = document.querySelector('[data-object="camera"]'); b.focus(); b.dispatchEvent(new FocusEvent('focus'));`);
+  await sleep(100);
+  const r = await ev(`(() => { const t = document.querySelector('#room .tip').getBoundingClientRect(); const b = document.querySelector('[data-object="camera"]').getBoundingClientRect(); const cx = t.left + t.width / 2; return { cx, l: b.left, r: b.right, hidden: document.querySelector('#room .tip').hidden }; })()`);
+  return !r.hidden && r.cx >= r.l - 1 && r.cx <= r.r + 1 ? '' : JSON.stringify(r);
+});
+
+await scenario('right-click outside the room and swings during a panel are left alone', async () => {
+  await open();
+  const hud = await ev(`(() => { const e = new MouseEvent('contextmenu', { bubbles: true, cancelable: true }); document.querySelector('.hud').dispatchEvent(e); return e.defaultPrevented; })()`);
+  if (hud) return 'contextmenu on the HUD was prevented';
+  const inRoom = await ev(`(() => { const e = new MouseEvent('contextmenu', { bubbles: true, cancelable: true }); document.querySelector('#room canvas.world').dispatchEvent(e); return e.defaultPrevented; })()`);
+  if (!inRoom) return 'contextmenu in the room was not prevented';
+  await ev(`document.querySelector('[data-hud="contact"]').click()`); await sleep(400);
+  const [x, y] = await roomCentre();
+  await rightDrag(x, y, 300);
+  await sleep(100);
+  const s = await ev(`${SCENE}.world.swing()`);
+  return s === 0 ? '' : `swing with a panel open: ${s}`;
+});
+
+await scenario('the pager buzz shows an alert emote over Tim', async () => {
+  const fast = `const st = window.setTimeout; window.setTimeout = (f, ms, ...a) => st(f, ms === 15000 ? 50 : ms, ...a);`;
+  await open({ before: `try { sessionStorage.clear(); } catch {} ${fast}` });
+  for (let i = 0; i < 20; i++) { if (await ev(`!!document.querySelector('#room .emote[data-emote="alert"]')`)) return ''; await sleep(100); }
+  return 'no alert emote';
+});
+
+await scenario('a floor click drops a marker', async () => {
+  await open();
+  const [x, y] = await ev(`(() => { ${CLIENT} const w = ${SCENE}.world; return client(w, w.project({ x: 22 * 8 + 4, y: 0, z: 9 * 8 + 4 })); })()`);
+  await clickAt(x, y);
+  await sleep(100);
+  const m = await ev(`${SCENE}.world.lastMark`);
+  return m && m.col === 22 && m.row === 9 ? '' : `mark ${JSON.stringify(m) ?? 'none'}`;
+});
+
 // ---------- the 3D world on its own test page ----------
 await scenario('world: renders a non-blank frame', async () => {
   await open({ path: WORLD });

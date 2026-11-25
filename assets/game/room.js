@@ -571,6 +571,54 @@ function setupPager(room, scene) {
   return pager;
 }
 
+// ---------- camera swing (desktop): right-drag or a sideways trackpad swipe; wheel zooms a little ----------
+// Never on phones (one finger always means walk/tap) and never while a panel is open.
+// Four seconds after the last nudge the view eases back to the default (or snaps, under reduced motion).
+const SWING_PER_PX = 0.25;
+const SWING_RETURN_MS = 4000;
+function setupSwing(room, scene) {
+  const { world } = scene;
+  const allowed = () => !matchMedia(PHONE_QUERY).matches && !scene.panels.isOpen();
+  let drag = null, lastInput = 0, easing = 0;
+  const nudged = () => { lastInput = performance.now(); scheduleReturn(); };
+  room.addEventListener('contextmenu', (e) => e.preventDefault()); // only the room: right-click elsewhere stays normal
+  room.addEventListener('pointerdown', (e) => {
+    if (e.button !== 2 || !allowed()) return;
+    drag = { x: e.clientX, from: world.swing(), id: e.pointerId };
+    room.setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+  });
+  room.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    world.setSwing(drag.from + (e.clientX - drag.x) * SWING_PER_PX);
+    nudged();
+  });
+  const end = (e) => { if (drag && e.pointerId === drag.id) { drag = null; nudged(); } };
+  room.addEventListener('pointerup', end);
+  room.addEventListener('pointercancel', end);
+  room.addEventListener('wheel', (e) => {
+    if (!allowed()) return;
+    e.preventDefault();
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) world.setSwing(world.swing() - e.deltaX * 0.1);
+    else world.setZoom(world.zoom() * (1 + e.deltaY * 0.001));
+    nudged();
+  }, { passive: false });
+  function scheduleReturn() {
+    if (easing) return;
+    const step = (now) => {
+      easing = 0;
+      if (drag || world.swing() === 0) return;
+      if (now - lastInput < SWING_RETURN_MS) { easing = requestAnimationFrame(step); return; }
+      if (reducedMotion()) { world.setSwing(0); return; }
+      const s = world.swing();
+      const d = Math.min(Math.abs(s), 60 / 30); // ~60°/s at 30 fps
+      world.setSwing(Math.abs(s) <= d ? 0 : s - Math.sign(s) * d);
+      easing = requestAnimationFrame(step);
+    };
+    easing = requestAnimationFrame(step);
+  }
+}
+
 function currentFrame() {
   const hud = doc.querySelector('.hud');
   const hudH = hud ? hud.getBoundingClientRect().height : 0;
@@ -636,6 +684,17 @@ export function init() {
       );
     };
     setupKeyboard(scene);
+    setupSwing(room, scene);
+    // Emotes: alert when the pager goes off, a heart when everything is found (both also under
+    // reduced motion, as still images); the rest are idle chatter in the idle loop below.
+    scene.onPagerBuzz = () => tim.emote('alert', 2500);
+    scene.onCelebrate = () => tim.emote('heart', 2500);
+    scene.onWander = () => tim.emote('note', 1500);
+    scene.onFloorWalk = (cell) => world.markFloor(cell);
+    let lastInput = performance.now();
+    const woke = () => { lastInput = performance.now(); tim.clearEmote('zzz'); };
+    addEventListener('pointerdown', woke);
+    addEventListener('keydown', woke);
     let pendingCelebration = false;
     scene.onPanelOpened = (id) => {
       if (id === 'pager' || id === 'incident') scene.pager.stop();
@@ -705,6 +764,8 @@ export function init() {
       if (tick % 3 === 0) world.setFrame('plant', tick / 3);
       if (tim.walking) return;
       if (tim.pose === 'idle') tim.show('tim_idle_down', tick % 2);
+      if (performance.now() - lastInput > 30_000) { if (!tim.emoting()) tim.emote('zzz', 600_000); return; } // dozing: no wandering
+      if (!tim.emoting() && Math.random() < 0.01) tim.emote('dots', 1500); // about once a minute
       if (performance.now() - tim.lastAction > 12000) {
         scene.onWander?.();
         const spots = [];

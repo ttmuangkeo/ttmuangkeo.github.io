@@ -80,6 +80,13 @@ export function createTim(world, room, { start }) {
       reproject();
       emoteTimer = setTimeout(() => { if (emoteEl === el) { el.remove(); emoteEl = null; } }, ms);
     },
+    emoting: () => emoteEl?.dataset.emote ?? null,
+    clearEmote(kind) {
+      if (!emoteEl || (kind && emoteEl.dataset.emote !== kind)) return;
+      clearTimeout(emoteTimer);
+      emoteEl.remove();
+      emoteEl = null;
+    },
     // Walks to a cell. Resolves true on arrival, false if a newer walk took over.
     // settle: false keeps the walk pose at the end (keyboard steps chain into the next one).
     async walkTo(target, { settle = true, diagonal = true } = {}) {
