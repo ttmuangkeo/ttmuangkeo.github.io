@@ -44,9 +44,13 @@ async function open({ w = 1280, h = 800, mobile = false, before = '' } = {}) {
 const panel = () => ev(`({ open: document.getElementById('panel').open, obj: document.getElementById('panel').dataset.object })`);
 
 const results = [];
+const ONLY = process.env.ONLY; // ONLY="part of a name" runs just the matching scenarios
 async function scenario(name, fn) {
+  if (ONLY && !name.includes(ONLY)) return;
+  const t0 = Date.now();
   try { const why = await fn(); results.push([name, !why, why || '']); }
   catch (e) { results.push([name, false, String(e)]); }
+  if (process.env.VERBOSE) console.log(`  ${((Date.now() - t0) / 1000).toFixed(1)}s ${name}`);
 }
 
 await scenario('shift+tab right after opening stays inside the panel', async () => {
@@ -274,6 +278,22 @@ await scenario('a failed story fetch leaves the whiteboard empty without errors'
   await sleep(600);
   const r = await ev(`({ errs: window.__errs, text: (document.querySelector('#room .board-overlay')?.textContent || '').trim() })`);
   return !r.errs.length && !r.text ? '' : JSON.stringify(r);
+});
+
+await scenario('every one of the twelve objects opens a panel with content', async () => {
+  await open();
+  const ids = await ev(`[...document.querySelectorAll('#room .obj')].map((b) => b.dataset.object)`);
+  if (ids.length !== 12) return `${ids.length} objects`;
+  const bad = [];
+  for (const id of ids) {
+    await ev(`document.querySelector('[data-object="${id}"]').click()`);
+    let p = {};
+    for (let i = 0; i < 50; i++) { await sleep(100); p = await ev(`(() => { const d = document.getElementById('panel'); return { open: d.open, obj: d.dataset.object, len: d.querySelector('.panel-body, .inc-log, .mig-log')?.textContent.trim().length || 0, loading: !!d.querySelector('.panel-loading') }; })()`); if (p.open && p.obj === id && p.len > 40 && !p.loading) break; }
+    if (!(p.open && p.obj === id && p.len > 40)) bad.push(`${id}: ${JSON.stringify(p)}`);
+    await key('Escape', 27); await sleep(300);
+  }
+  const errs = await ev(`window.__errs || []`);
+  return bad.length || errs.length ? JSON.stringify({ bad, errs }) : '';
 });
 
 ws.close(); cleanup();
