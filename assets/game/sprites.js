@@ -311,6 +311,38 @@ function drawRug() {               // big cream rug
   return frame(g);
 }
 
+// ---------- the 3D room's shell: back wall, left wall and floor, at world size ----------
+function drawBackWall() {          // 240x72: off-white wall, window frame and sill, white baseboard
+  const g = grid(240, 72);
+  rect(g, 0, 0, 240, 72, '1');
+  rect(g, 0, 0, 240, 3, '5'); rect(g, 0, 3, 240, 1, '2');
+  rect(g, 0, 68, 240, 3, '9'); rect(g, 0, 71, 240, 1, '5');
+  rect(g, 0, 0, 2, 72, '2');                                              // shade in the left corner
+  const { x, y, w, h } = WINDOW;
+  box(g, x - 2, y - 2, w + 4, h + 4, '[', '8');
+  rect(g, x - 4, y + h + 2, w + 8, 2, '9'); rect(g, x - 4, y + h + 4, w + 8, 1, '5');
+  return frame(g);
+}
+function drawLeftWall() {          // 112x72, front edge on the left: sage slats, trim, baseboard
+  const g = grid(112, 72);
+  rect(g, 0, 0, 112, 72, '3');
+  for (let x = 3; x < 112; x += 5) rect(g, x, 4, 1, 64, '4');
+  rect(g, 0, 0, 112, 3, '5'); rect(g, 0, 3, 112, 1, '2');
+  rect(g, 0, 68, 112, 3, '9'); rect(g, 0, 71, 112, 1, '5');
+  rect(g, 110, 0, 2, 72, '4');                                            // shade in the back corner
+  return frame(g);
+}
+function drawFloor() {             // 240x112 light oak: wide planks running left to right, staggered seams
+  const g = grid(240, 112);
+  rect(g, 0, 0, 240, 112, '6');
+  rect(g, 0, 0, 240, 2, '7');
+  for (let y = 8, row = 0; y < 112; y += 8, row++) {
+    rect(g, 0, y, 240, 1, '7');
+    for (let x = (row * 37) % 64; x < 240; x += 64) rect(g, x, y - 7, 1, 7, '7');
+  }
+  return frame(g);
+}
+
 // ---------- chibi Tim (24x36): big head, short black hair, green rain jacket, tan boots ----------
 // Built from parts so every pose shares one silhouette. view: 'down' (front), 'up' (back), 'side' (facing left).
 function timHead(g, view, oy) {
@@ -413,6 +445,9 @@ const CAMERA = drawCamera(false);
 
 export const SPRITES = {
   room: sheet(240, 135, [drawRoom()]),
+  wall_back: sheet(240, 72, [drawBackWall()]),
+  wall_left: sheet(112, 72, [drawLeftWall()]),
+  floor: sheet(240, 112, [drawFloor()]),
   whiteboard: sheet(52, 34, [drawWhiteboard()]),
   pennant: sheet(20, 14, [drawPennant()]),
   map: sheet(26, 18, [drawMap(false), drawMap(true)]),

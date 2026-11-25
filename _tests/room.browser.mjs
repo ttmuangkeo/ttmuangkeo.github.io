@@ -16,7 +16,7 @@ const BASE = `http://127.0.0.1:${httpPort}/`;
 
 const server = spawn('python3', ['-m', 'http.server', String(httpPort), '--bind', '127.0.0.1'], { cwd: ROOT, stdio: 'ignore' });
 const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'room-test-'));
-const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${cdpPort}`, `--user-data-dir=${prof}`, '--hide-scrollbars', 'about:blank'], { stdio: 'ignore' });
+const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${cdpPort}`, `--user-data-dir=${prof}`, '--hide-scrollbars', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', 'about:blank'], { stdio: 'ignore' });
 const cleanup = () => { try { chrome.kill(); server.kill(); fs.rmSync(prof, { recursive: true, force: true, maxRetries: 5 }); } catch { /* ignore */ } };
 
 let tabs;
@@ -34,12 +34,12 @@ const key = async (k, kc, mods = 0) => {
 };
 await send('Runtime.enable'); await send('Page.enable');
 let injected = null;
-async function open({ w = 1280, h = 800, mobile = false, before = '' } = {}) {
+async function open({ w = 1280, h = 800, mobile = false, before = '', path = '', dpr = 1 } = {}) {
   if (injected) await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: injected });
   injected = (await send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__errs = []; addEventListener('error', (e) => window.__errs.push(String(e.message))); addEventListener('unhandledrejection', (e) => window.__errs.push(String(e.reason))); try { localStorage.clear(); } catch {} ${before}` })).identifier;
-  await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
+  await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: dpr, mobile });
   await send('Page.navigate', { url: 'about:blank' }); await sleep(150);
-  await send('Page.navigate', { url: BASE }); await sleep(1500);
+  await send('Page.navigate', { url: BASE + path }); await sleep(1500);
 }
 const panel = () => ev(`({ open: document.getElementById('panel').open, obj: document.getElementById('panel').dataset.object })`);
 
@@ -302,6 +302,67 @@ await scenario('every one of the twelve objects opens a panel with content', asy
   }
   const errs = await ev(`window.__errs || []`);
   return bad.length || errs.length ? JSON.stringify({ bad, errs }) : '';
+});
+
+// ---------- the 3D world on its own test page ----------
+const WORLD = '_tests/world.html';
+// Distinct colours in a canvas, read through a 2D copy.
+const colours = (sel) => `(() => { const src = ${sel}; const c = document.createElement('canvas'); c.width = src.width; c.height = src.height; const x = c.getContext('2d'); x.drawImage(src, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; const s = new Set(); for (let i = 0; i < d.length; i += 4) s.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]); return s.size; })()`;
+// Client point of a render-pixel point in the world canvas.
+const CLIENT = `const client = (w, p) => { const r = w.canvas.getBoundingClientRect(); const k = r.width / w.frame.renderW; return [r.left + p.x * k, r.top + p.y * k]; };`;
+
+await scenario('world: renders a non-blank frame', async () => {
+  await open({ path: WORLD });
+  const err = await ev(`window.__worldError || ''`);
+  if (err) return err;
+  const n = await ev(colours('window.__world.canvas'));
+  return n > 40 ? '' : `only ${n} colours`;
+});
+
+await scenario('world: every object is visible and pickable at its anchor', async () => {
+  for (const o of [{ w: 1280, h: 720 }, { w: 375, h: 812, mobile: true }]) {
+    await open({ path: WORLD, ...o });
+    const bad = await ev(`(async () => { ${CLIENT} const { OBJECTS } = await import('/assets/game/objects.js'); const w = window.__world;
+      return OBJECTS.map((ob) => { const [x, y] = client(w, w.project(w.anchorOf(ob.id))); const hit = w.pickObject(x, y); return hit === ob.id ? '' : ob.id + '->' + hit; }).filter(Boolean); })()`);
+    if (!Array.isArray(bad) || bad.length) return `${o.w}px: ${JSON.stringify(bad)}`;
+  }
+  return '';
+});
+
+await scenario('world: the whole room is inside the frame', async () => {
+  for (const o of [{ w: 1280, h: 720 }, { w: 375, h: 812, mobile: true }]) {
+    await open({ path: WORLD, ...o });
+    const out = await ev(`(() => { const w = window.__world, { renderW: W, renderH: H } = w.frame, out = [];
+      for (const x of [0, 240]) for (const y of [0, 72]) for (const z of [0, 112]) { const p = w.project({ x, y, z }); if (p.x < -2 || p.y < -2 || p.x > W + 2 || p.y > H + 2) out.push([x, y, z, Math.round(p.x), Math.round(p.y)]); }
+      return out; })()`);
+    if (out.length) return `${o.w}px corners outside: ${JSON.stringify(out)}`;
+  }
+  return '';
+});
+
+await scenario('world: setFrame swaps a prop texture', async () => {
+  await open({ path: WORLD });
+  const r = await ev(`(() => { const w = window.__world; const b = w.rectOf('laptop');
+    const grab = () => { const c = document.createElement('canvas'); c.width = w.canvas.width; c.height = w.canvas.height; const x = c.getContext('2d'); x.drawImage(w.canvas, 0, 0); return [...x.getImageData(Math.round(b.x), Math.round(b.y), Math.max(1, Math.round(b.w)), Math.max(1, Math.round(b.h))).data]; };
+    const a = grab(); w.setFrame('laptop', 1); w.renderNow(); const c = grab(); let diff = 0; for (let i = 0; i < a.length; i++) if (a[i] !== c[i]) diff++; return diff; })()`);
+  return r > 0 ? '' : 'monitor pixels did not change';
+});
+
+await scenario('world: a 2x screen still renders at pixel ratio 1', async () => {
+  await open({ path: WORLD, dpr: 2 });
+  const r = await ev(`({ cw: window.__world.canvas.width, rw: window.__world.frame.renderW })`);
+  return r.cw === r.rw ? '' : JSON.stringify(r);
+});
+
+await scenario('world: survives a lost WebGL context', async () => {
+  await open({ path: WORLD });
+  await ev(`(() => { const gl = window.__world.canvas.getContext('webgl2') || window.__world.canvas.getContext('webgl'); window.__lose = gl.getExtension('WEBGL_lose_context'); window.__lose.loseContext(); })()`);
+  await sleep(200);
+  await ev(`window.__lose.restoreContext()`);
+  await sleep(500);
+  const n = await ev(colours('window.__world.canvas'));
+  const errs = await ev(`window.__errs`);
+  return n > 40 && !errs.length ? '' : JSON.stringify({ n, errs });
 });
 
 ws.close(); cleanup();

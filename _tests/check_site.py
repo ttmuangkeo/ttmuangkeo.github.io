@@ -753,7 +753,8 @@ def test_tray_markup():
 
 
 GAME_FILES = ["room.js", "sprites.js", "objects.js", "grid.js", "state.js", "panels.js", "room.css",
-              "controls.js", "sky.js", "incident.js", "migration.js", "dom.js"]
+              "controls.js", "sky.js", "incident.js", "migration.js", "dom.js",
+              "view.js", "textures.js", "props.js", "world.js"]
 
 
 def test_game_budget():

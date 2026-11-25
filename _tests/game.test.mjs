@@ -497,3 +497,10 @@ test('chibi Tim has a big head with hair and eyes', () => {
   const eyes = SPRITES.tim_idle_down.frames[0].slice(8, 14).join('').split('').filter((c) => c === 'K').length;
   assert.ok(eyes >= 2, `eyes: ${eyes}`);
 });
+
+// ---------- room shell textures ----------
+test('the room shell has wall and floor textures at world size', () => {
+  assert.deepEqual([SPRITES.wall_back.w, SPRITES.wall_back.h], [240, 72]);
+  assert.deepEqual([SPRITES.wall_left.w, SPRITES.wall_left.h], [112, 72]);
+  assert.deepEqual([SPRITES.floor.w, SPRITES.floor.h], [240, 112]);
+});
