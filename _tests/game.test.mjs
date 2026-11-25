@@ -66,20 +66,44 @@ test('palette keys are single characters with "." transparent', () => {
 });
 
 // ---------- Task 3: objects and scaling ----------
-import { OBJECTS, ROOM } from '../assets/game/objects.js';
-import { fitScale } from '../assets/game/grid.js';
+import { OBJECTS, DECOR, ROOM, WINDOW_SPOT } from '../assets/game/objects.js';
 
 test('OBJECTS has the 12 ids in order', () => {
   assert.deepEqual(OBJECTS.map((o) => o.id), OBJECT_IDS);
 });
 
-test("every object's sprite exists and lies inside the room", () => {
-  for (const o of OBJECTS) {
-    const s = SPRITES[o.sprite];
-    assert.ok(s, `${o.id}: sprite ${o.sprite}`);
-    assert.ok(o.x >= 0 && o.y >= 0 && o.x + s.w <= NATIVE_W && o.y + s.h <= NATIVE_H, `${o.id} out of bounds`);
-    assert.ok(o.label && o.ariaLabel, `${o.id} needs label and ariaLabel`);
+test('every object and decor piece lies inside the room', () => {
+  for (const o of [...OBJECTS, ...DECOR]) {
+    const s = SPRITES[o.sprite], a = o.at;
+    assert.ok(s && a, `${o.id ?? o.sprite}: sprite and placement`);
+    if (o.id) assert.ok(o.label && o.ariaLabel, `${o.id} needs label and ariaLabel`);
+    assert.ok(['back', 'left', 'floor', 'desk', 'hang'].includes(a.on), `${o.id ?? o.sprite} mount ${a.on}`);
+    if (a.on === 'back') assert.ok(a.x >= 0 && a.x + s.w <= 240 && a.y >= 0 && a.y + s.h <= 72, o.id ?? o.sprite);
+    if (a.on === 'left') assert.ok(a.z >= 0 && a.z + s.w <= 112 && a.y >= 0 && a.y + s.h <= 72, o.id ?? o.sprite);
+    if (a.on === 'hang') assert.ok(a.x >= 0 && a.x + s.w <= 240 && a.z >= 0 && a.z <= 112, o.sprite);
+    if (a.on === 'floor' || a.on === 'desk') assert.ok(a.x >= 0 && a.x + s.w <= 240 && a.z >= 0 && a.z + a.d <= 112, o.id ?? o.sprite);
   }
+});
+
+test('back-wall pieces and the window never overlap', () => {
+  const rects = [...OBJECTS, ...DECOR].filter((o) => o.at.on === 'back')
+    .map((o) => ({ n: o.id ?? o.sprite, x: o.at.x, y: o.at.y, w: SPRITES[o.sprite].w, h: SPRITES[o.sprite].h }))
+    .concat([{ n: 'window', ...WINDOW }]);
+  for (const a of rects) for (const b of rects) if (a !== b && a.n !== 'shelf' && b.n !== 'shelf')
+    assert.ok(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y, `${a.n} overlaps ${b.n}`);
+});
+
+test('walking straight up from the start reaches the trail map', () => {
+  const map = OBJECTS.find((o) => o.id === 'map');
+  assert.deepEqual(map.useSpot, { col: ROOM.start.col, row: 0 });
+  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked);
+  for (let r = 0; r <= ROOM.start.row; r++) assert.ok(g.walkable(ROOM.start.col, r), `row ${r}`);
+});
+
+test('the window spot is walkable and under the window', () => {
+  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked);
+  assert.ok(g.walkable(WINDOW_SPOT.col, WINDOW_SPOT.row));
+  const x = WINDOW_SPOT.col * 8 + 4; assert.ok(x >= WINDOW.x && x <= WINDOW.x + WINDOW.w);
 });
 
 test('the monitors cycle at least three screens and the plant sways', () => {
@@ -96,7 +120,7 @@ test('no two objects have use spots within one step of each other', () => {
 });
 
 test('no floor cell is within reach of two objects', () => {
-  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked, ROOM.floorTopRow);
+  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked);
   for (let c = 0; c < ROOM.cols; c++) for (let r = 0; r < ROOM.rows; r++) {
     if (!g.walkable(c, r)) continue;
     const near = OBJECTS.filter((o) => Math.abs(o.useSpot.col - c) + Math.abs(o.useSpot.row - r) <= 1).map((o) => o.id);
@@ -104,29 +128,14 @@ test('no floor cell is within reach of two objects', () => {
   }
 });
 
-test('the room grid is 30x16 with the floor from row 9', () => {
-  assert.deepEqual([ROOM.cols, ROOM.rows, ROOM.cell, ROOM.floorTopRow], [30, 16, 8, 9]);
+test('the room grid is 30x14 and every row is floor', () => {
+  assert.deepEqual([ROOM.cols, ROOM.rows, ROOM.cell], [30, 14, 8]);
+  assert.equal(ROOM.floorTopRow, undefined);
 });
 
 test('useSpots are walkable floor cells', () => {
-  const blocked = new Set(ROOM.blocked.map(([c, r]) => `${c},${r}`));
-  for (const o of OBJECTS) {
-    const { col, row } = o.useSpot;
-    assert.ok(col >= 0 && col < ROOM.cols, `${o.id} col`);
-    assert.ok(row >= ROOM.floorTopRow && row < ROOM.rows, `${o.id} row ${row} not on floor`);
-    assert.ok(!blocked.has(`${col},${row}`), `${o.id} useSpot is blocked`);
-  }
-});
-
-test('fitScale on desktop is the largest whole number that fits', () => {
-  assert.equal(fitScale(1280, 800, 48, false), 5);
-  assert.equal(fitScale(1280, 720, 64, false), 4);
-  assert.equal(fitScale(300, 200, 48, false), 1);
-  assert.ok(Number.isInteger(fitScale(1920, 1080, 52, false)));
-});
-
-test('fitScale on phones fits the width', () => {
-  assert.equal(fitScale(375, 812, 48, true), 375 / 240);
+  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked);
+  for (const o of OBJECTS) assert.ok(g.walkable(o.useSpot.col, o.useSpot.row), `${o.id} useSpot ${JSON.stringify(o.useSpot)}`);
 });
 
 // ---------- Task 4: walk grid and pathfinding ----------
@@ -157,17 +166,11 @@ test('findPath returns [] for the same cell', () => {
 });
 
 test('every object useSpot is reachable from where Tim starts', () => {
-  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked, ROOM.floorTopRow);
+  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked);
   for (const o of OBJECTS) {
-    const path = findPath(g, ROOM.start, o.useSpot);
+    const path = findPath(g, ROOM.start, o.useSpot, { diagonal: true });
     assert.ok(path.length > 0, `${o.id} unreachable`);
   }
-});
-
-test('the walk grid treats the wall rows as blocked', () => {
-  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked, ROOM.floorTopRow);
-  assert.equal(g.walkable(5, ROOM.floorTopRow - 1), false);
-  assert.equal(g.walkable(ROOM.start.col, ROOM.start.row), true);
 });
 
 test('retarget: a newer walk id supersedes the old one', () => {
@@ -373,14 +376,16 @@ test('the cutover runs in six stages in the runbook order', () => {
   assert.ok(panel.title && panel.story.startsWith('#'));
 });
 
-test('the rack stands on the floor clear of the mailbox, used from its left', () => {
+test('the rack stands on the floor in the front-right corner, used from its left', () => {
   const rack = OBJECTS.find((o) => o.id === 'rack');
   assert.equal(rack.face, 'right');
+  assert.equal(rack.at.on, 'floor');
   const blocked = new Set(ROOM.blocked.map(([c, r]) => `${c},${r}`));
-  const s = SPRITES.rack;
-  const footCols = [Math.floor(rack.x / 8), Math.floor((rack.x + s.w - 1) / 8)];
-  for (const c of footCols) assert.ok(blocked.has(`${c},${Math.floor((rack.y + s.h - 1) / 8)}`), `rack foot col ${c} blocked`);
-  assert.equal(rack.useSpot.col, footCols[0] - 1);
+  const c0 = Math.floor(rack.at.x / 8), c1 = Math.floor((rack.at.x + SPRITES.rack.w - 1) / 8);
+  const r0 = Math.floor(rack.at.z / 8), r1 = Math.floor((rack.at.z + rack.at.d - 1) / 8);
+  for (let c = c0; c <= c1; c++) for (let r = r0; r <= r1; r++) assert.ok(blocked.has(`${c},${r}`), `rack cell ${c},${r} blocked`);
+  assert.ok(rack.at.x + SPRITES.rack.w > 200 && rack.at.z + rack.at.d > 80, 'front-right corner');
+  assert.equal(rack.useSpot.col, c0 - 1);
   assert.equal(SPRITES.rack.frames.length, 2, 'rack lights blink');
 });
 
