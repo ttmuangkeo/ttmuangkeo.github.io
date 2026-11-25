@@ -365,6 +365,43 @@ await scenario('world: survives a lost WebGL context', async () => {
   return n > 40 && !errs.length ? '' : JSON.stringify({ n, errs });
 });
 
+// ---------- Tim in the world (same test page) ----------
+await scenario('tim: walks a diagonal path and faces his heading', async () => {
+  await open({ path: WORLD });
+  const r = await ev(`(async () => { const t = window.__tim; if (!t) return { err: window.__worldError || 'no __tim' };
+    const poses = new Set(); const spy = setInterval(() => poses.add(t.pose), 30);
+    const ok = await t.walkTo({ col: 20, row: 11 }); clearInterval(spy);
+    return { ok, cell: t.cell(), poses: [...poses] }; })()`);
+  if (r.err) return r.err;
+  if (!r.ok || r.cell.col !== 20 || r.cell.row !== 11) return JSON.stringify(r);
+  return r.poses.some((p) => /^tim_walk_(down|right)$/.test(p)) ? '' : `poses ${JSON.stringify(r.poses)}`;
+});
+
+await scenario('tim: a newer walk cancels the older one', async () => {
+  await open({ path: WORLD });
+  const r = await ev(`(async () => { const t = window.__tim; const a = t.walkTo({ col: 2, row: 12 }); const b = t.walkTo({ col: 25, row: 3 }); return [await a, await b, t.cell()]; })()`);
+  return r[0] === false && r[1] === true && r[2].col === 25 && r[2].row === 3 ? '' : JSON.stringify(r);
+});
+
+await scenario('tim: the name tag follows him', async () => {
+  await open({ path: WORLD });
+  const y = () => ev(`+document.querySelector('#room .tim').style.getPropertyValue('--y')`);
+  await ev(`window.__tim.walkTo({ col: 13, row: 10 })`); await sleep(100);
+  const y0 = await y();
+  await ev(`window.__tim.walkTo({ col: 13, row: 2 })`); await sleep(100);
+  const y1 = await y();
+  return y1 < y0 - 10 ? '' : `name tag y ${y0} -> ${y1}`;
+});
+
+await scenario('tim: an emote shows above him and goes away', async () => {
+  await open({ path: WORLD });
+  await ev(`window.__tim.emote('heart', 300)`); await sleep(80);
+  const on = await ev(`!!document.querySelector('#room .emote[data-emote="heart"]')`);
+  await sleep(500);
+  const off = await ev(`!document.querySelector('#room .emote[data-emote="heart"]')`);
+  return on && off ? '' : JSON.stringify({ on, off });
+});
+
 ws.close(); cleanup();
 let failed = 0;
 for (const [name, ok, why] of results) { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${ok ? '' : ': ' + why}`); if (!ok) failed++; }

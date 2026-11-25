@@ -10,3 +10,13 @@ export function h(doc, tag, props = {}, ...kids) {
   el.append(...kids);
   return el;
 }
+
+// Absolutely positions an overlay element in render pixels; CSS multiplies by --s.
+// Deeper on screen (larger y + h) stacks in front.
+export function place(el, x, y, w, h) {
+  el.style.setProperty('--x', x);
+  el.style.setProperty('--y', y);
+  el.style.setProperty('--w', w);
+  el.style.setProperty('--h', h);
+  el.style.zIndex = String(Math.round(10 + y + h));
+}
