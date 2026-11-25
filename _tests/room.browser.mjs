@@ -441,6 +441,13 @@ await scenario('a floor click drops a marker', async () => {
   return m && m.col === 22 && m.row === 9 ? '' : `mark ${JSON.stringify(m) ?? 'none'}`;
 });
 
+await scenario('the whiteboard numbers dim with the room at night', async () => {
+  await open();
+  const f = await ev(`(() => { document.getElementById('room').dataset.sky = 'night'; return getComputedStyle(document.querySelector('#room .board-overlay')).filter; })()`);
+  const m = /brightness\(([\d.]+)\)/.exec(f || '');
+  return m && +m[1] < 0.8 ? '' : `filter ${f}`;
+});
+
 // ---------- the 3D world on its own test page ----------
 await scenario('world: renders a non-blank frame', async () => {
   await open({ path: WORLD });

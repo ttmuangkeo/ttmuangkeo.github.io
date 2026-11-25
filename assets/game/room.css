@@ -269,6 +269,9 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
 .board-line { display: block; white-space: nowrap; }
 .board-line:nth-of-type(even) { color: var(--rust-text); }
 html.is-phone .board-overlay { display: none; }
+/* the numbers are HTML, so they dim with the room's light by hand */
+#room[data-sky^="dawn"] .board-overlay, #room[data-sky^="dusk"] .board-overlay { filter: brightness(0.85); }
+#room[data-sky^="night"] .board-overlay, #room[data-sky="aurora"] .board-overlay { filter: brightness(0.55); }
 .obj.is-buzzing { animation: buzz 0.24s steps(2) infinite; }
 @keyframes buzz {
   from { transform: translateX(calc(var(--s) * -0.6px)); }
