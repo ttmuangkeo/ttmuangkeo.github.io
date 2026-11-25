@@ -129,6 +129,8 @@ def iter_text_files():
         rel = p.relative_to(ROOT)
         if rel.parts[0] in SKIP_DIRS or not p.is_file():
             continue
+        if rel.parts[:2] == ("assets", "vendor"):  # third-party minified code, not site copy
+            continue
         if p.suffix.lower() in BINARY_EXT:
             continue
         try:
@@ -839,6 +841,33 @@ def test_new_blocks():
     if has(feats, "integrations-wrap"):
         problems.append(".integrations-wrap should be gone")
     check("new_blocks", not problems, "; ".join(problems))
+
+
+VENDOR_THREE = ROOT / "assets" / "vendor" / "three"
+
+
+def test_vendor_three():
+    """Three.js r170 is vendored and the homepage loads it through an import map."""
+    problems = []
+    lib = VENDOR_THREE / "three.module.min.js"
+    src = lib.read_text(encoding="utf-8") if lib.exists() else ""
+    rev = re.search(r'const (\w+)="(\d+)"', src)  # minified: const t="170" ... t as REVISION
+    if not (rev and rev.group(2) == "170" and re.search(rf'\b{rev.group(1)} as REVISION\b', src)):
+        problems.append("assets/vendor/three/three.module.min.js missing or not r170")
+    if not (VENDOR_THREE / "LICENSE").exists():
+        problems.append("assets/vendor/three/LICENSE missing")
+    html = load_index()
+    m = re.search(r'<script type="importmap">(.*?)</script>', html, re.S)
+    try:
+        import json
+        target = json.loads(m.group(1))["imports"]["three"] if m else None
+    except (ValueError, KeyError):
+        target = None
+    if target != "./assets/vendor/three/three.module.min.js":
+        problems.append(f"import map maps three to {target!r}")
+    elif html.find("<script type=\"importmap\">") > html.find("assets/game/room.js"):
+        problems.append("import map must come before room.js")
+    check("vendor_three", not problems, "; ".join(problems))
 
 
 def main():
