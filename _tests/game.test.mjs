@@ -382,3 +382,65 @@ test('the rack stands on the floor clear of the mailbox, used from its left', ()
   assert.equal(rack.useSpot.col, footCols[0] - 1);
   assert.equal(SPRITES.rack.frames.length, 2, 'rack lights blink');
 });
+
+// ---------- 3D view ----------
+import * as V from '../assets/game/view.js';
+
+test('cell and world coordinates round-trip at cell centres', () => {
+  assert.deepEqual(V.cellToWorld({ col: 0, row: 0 }), { x: 4, z: 4 });
+  assert.deepEqual(V.cellToWorld({ col: 29, row: 13 }), { x: 236, z: 108 });
+  assert.deepEqual(V.worldToCell({ x: 236.9, z: 108 }), { col: 29, row: 13 });
+});
+
+test('frameFor: desktop is ~16:9 at an integer scale, never wider than the viewport', () => {
+  assert.deepEqual(V.frameFor(1280, 768, 48, false), { renderW: 416, renderH: 234, scale: 3 });
+  assert.deepEqual(V.frameFor(1280, 688, 64, false), { renderW: 554, renderH: 311, scale: 2 });
+  for (const [vw, vh, hud] of [[1440, 868, 52], [1920, 1048, 52], [700, 568, 90]]) {
+    const f = V.frameFor(vw, vh, hud, false);
+    assert.ok(Number.isInteger(f.scale) && f.scale >= 1);
+    assert.ok(f.renderW * f.scale <= vw - 32 && f.renderH * f.scale <= vh - hud);
+    assert.ok(f.renderW >= 300 && f.renderW <= 700, `renderW ${f.renderW}`);
+  }
+});
+
+test('frameFor: phones render 240x180 and fill the width', () => {
+  assert.deepEqual(V.frameFor(375, 780, 48, true), { renderW: 240, renderH: 180, scale: 375 / 240 });
+});
+
+test('clampSwing keeps the swing between -10 and +30 degrees', () => {
+  assert.equal(V.clampSwing(-50), -10); assert.equal(V.clampSwing(45), 30); assert.equal(V.clampSwing(7), 7);
+});
+
+test('the camera stays outside the open front and on the room side of the left wall across the swing', () => {
+  for (const aspect of [16 / 9, 4 / 3]) for (let s = V.SWING_MIN; s <= V.SWING_MAX; s += 5) {
+    const { position: p } = V.cameraPose(s, aspect);
+    assert.ok(p.x > 0 && p.z > V.ROOM_D && p.y > V.WALL_H, `swing ${s}: ${JSON.stringify(p)}`);
+  }
+});
+
+test('the default camera frames the whole room at desktop and phone aspects', () => {
+  for (const aspect of [16 / 9, 4 / 3]) {
+    const pose = V.cameraPose(0, aspect);
+    for (const x of [0, 240]) for (const y of [0, 72]) for (const z of [0, 112]) {
+      const n = V.projectNdc(pose, aspect, { x, y, z });
+      assert.ok(Math.abs(n.x) <= 1 && Math.abs(n.y) <= 1, `${aspect} corner ${x},${y},${z} -> ${JSON.stringify(n)}`);
+    }
+  }
+});
+
+test('facingFor is camera-relative', () => {
+  assert.equal(V.facingFor(0, 1, 0), 'down'); assert.equal(V.facingFor(0, -1, 0), 'up');
+  assert.equal(V.facingFor(1, 0, 0), 'right'); assert.equal(V.facingFor(-1, 0, 0), 'left');
+  assert.equal(V.facingFor(1, 0, 90), 'down'); // camera on the +x side: walking +x comes toward it
+});
+
+test('quadMatrix maps the rectangle corners onto the quad', () => {
+  const quad = [[10, 5], [110, 12], [104, 80], [8, 70]];
+  const m = V.quadMatrix(52, 34, quad);
+  const apply = (x, y) => { const w = m[3] * x + m[7] * y + m[15]; return [(m[0] * x + m[4] * y + m[12]) / w, (m[1] * x + m[5] * y + m[13]) / w]; };
+  [[0, 0], [52, 0], [52, 34], [0, 34]].forEach(([x, y], i) => {
+    const [px, py] = apply(x, y);
+    assert.ok(Math.abs(px - quad[i][0]) < 0.01 && Math.abs(py - quad[i][1]) < 0.01, `corner ${i}`);
+  });
+  assert.match(V.quadTransform(52, 34, quad), /^matrix3d\(([-\d.e]+,\s*){15}[-\d.e]+\)$/);
+});
