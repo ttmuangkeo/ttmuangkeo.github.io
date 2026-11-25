@@ -51,33 +51,10 @@ function box(g, x, y, w, h, fill, edge = 'k') { rect(g, x, y, w, h, edge); rect(
 function mirror(rows) { return rows.map((r) => [...r].reverse().join('')); }
 function sheet(w, h, frames) { return { w, h, frames }; }
 
-// ---------- room backdrop 240x135: a bright Seattle office ----------
-export const FLOOR_Y = 72;
-// The window opening in the backdrop; the live sky canvas is laid exactly over it.
+// The window on the back wall, in wall coordinates (y measured down from the top of the wall);
+// the live sky texture fills exactly this rectangle.
 export const WINDOW = { x: 138, y: 8, w: 66, h: 46 };
 
-function drawRoom() {
-  const g = grid(240, 135);
-  rect(g, 0, 0, 240, FLOOR_Y, '1');                                   // off-white wall
-  rect(g, 0, 0, 66, FLOOR_Y, '3');                                    // sage slat accent wall
-  for (let x = 3; x < 66; x += 5) rect(g, x, 4, 1, FLOOR_Y - 7, '4');
-  rect(g, 66, 3, 1, FLOOR_Y - 3, '2');                                // accent wall edge
-  rect(g, 67, 4, 1, FLOOR_Y - 7, 'A');
-  rect(g, 0, 0, 240, 3, '5'); rect(g, 0, 3, 240, 1, '2');             // ceiling trim + shadow line
-  // light oak floor: wide planks with staggered seams, darker where it meets the wall
-  rect(g, 0, FLOOR_Y, 240, 135 - FLOOR_Y, '6');
-  rect(g, 0, FLOOR_Y, 240, 2, '7');
-  for (let y = FLOOR_Y + 8, row = 0; y < 135; y += 8, row++) {
-    rect(g, 0, y, 240, 1, '7');
-    for (let x = (row * 37) % 64; x < 240; x += 64) rect(g, x, y - 7, 1, 7, '7');
-  }
-  rect(g, 0, FLOOR_Y - 4, 240, 3, '9'); rect(g, 0, FLOOR_Y - 1, 240, 1, '5'); // white baseboard
-  // window: black frame, white sill
-  const { x, y, w, h } = WINDOW;
-  box(g, x - 2, y - 2, w + 4, h + 4, '[', '8');
-  rect(g, x - 4, y + h + 2, w + 8, 2, '9'); rect(g, x - 4, y + h + 4, w + 8, 1, '5');
-  return frame(g);
-}
 
 // ---------- window (WINDOW.w x WINDOW.h): Seattle, the Space Needle and Rainier ----------
 // phase: dawn | day | dusk | night | aurora. f (0/1) twinkles stars, ripples the aurora, moves rain.
@@ -444,7 +421,6 @@ const TOOLBOX = drawToolbox(false);
 const CAMERA = drawCamera(false);
 
 export const SPRITES = {
-  room: sheet(240, 135, [drawRoom()]),
   wall_back: sheet(240, 72, [drawBackWall()]),
   wall_left: sheet(112, 72, [drawLeftWall()]),
   floor: sheet(240, 112, [drawFloor()]),

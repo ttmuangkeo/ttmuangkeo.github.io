@@ -53,9 +53,9 @@ html.game-ready .fallback { display: none; }
 html.game-ready .stage { display: flex; justify-content: center; align-items: flex-start; padding: 1rem 0; }
 
 #room {
-  --s: 4;
-  position: relative; isolation: isolate; /* sprite z-indexes stay inside the room */
-  width: calc(240px * var(--s)); height: calc(135px * var(--s));
+  --s: 2; --rw: 480; --rh: 270; /* render size in pixels, and the CSS scale on top (set by room.js) */
+  position: relative; isolation: isolate; /* overlay z-indexes stay inside the room */
+  width: calc(var(--rw) * var(--s) * 1px); height: calc(var(--rh) * var(--s) * 1px);
   background: var(--paper); box-shadow: 0 0 0 3px var(--ink), 0 14px 28px rgba(31, 42, 34, 0.18);
   overflow: hidden;
 }
@@ -65,18 +65,17 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
   width: calc(var(--w) * var(--s) * 1px); height: calc(var(--h) * var(--s) * 1px);
 }
 .px { display: block; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+#room > canvas.world { left: 0; top: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
 .layer { pointer-events: none; }
 
-/* Interactive objects are real buttons wearing a sprite. */
+/* Interactive objects are real, transparent buttons laid over their 3D props (the prop lights up on hover). */
 .obj {
   margin: 0; padding: 0; border: 0; background: none; cursor: pointer;
-  transition: transform 120ms steps(2);
 }
 .obj::after { /* invisible larger hit area (44px minimum on touch) */
   content: ""; position: absolute; left: 50%; top: 50%;
   width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
 }
-.obj:hover, .obj:focus-visible { transform: translateY(calc(var(--s) * -1px)); filter: brightness(1.15); }
 .obj:focus-visible { outline: calc(var(--s) * 1px) solid var(--rust); outline-offset: calc(var(--s) * 1px); }
 
 .tip {
@@ -87,14 +86,16 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
   pointer-events: none;
 }
 
-.tim { pointer-events: none; transition: opacity 120ms linear; }
-.tim::after { /* soft shadow under his feet */
-  content: ""; position: absolute; left: 10%; right: 10%; bottom: calc(var(--s) * -1px);
-  height: calc(var(--s) * 2px); background: rgba(0, 0, 0, 0.25); border-radius: 50%; z-index: -1;
+/* Tim's name tag, under his feet, and the emote bubble over his head. */
+#room > .tim {
+  width: auto; height: auto; transform: translate(-50%, 3px); pointer-events: none;
+  padding: 0 4px; background: rgba(31, 42, 34, 0.78); color: var(--paper);
+  font: 600 10px/1.4 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
+  transition: opacity 120ms linear;
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .obj { transition: none; }
+#room > .emote {
+  width: calc(11px * max(2, var(--s))); height: calc(11px * max(2, var(--s)));
+  transform: translate(-50%, -100%); pointer-events: none;
 }
 
 /* ---------- found sparkle ---------- */
@@ -248,18 +249,20 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
 #room > .bubble--hello { max-width: min(16rem, 70vw); }
 #room > .bubble--top { transform: translate(-50%, 0); max-width: min(22rem, calc(100% - 1rem)); }
 #room > .bubble--left { transform: translate(-100%, -100%); width: max-content; }
+#room > .bubble--below { transform: translate(-50%, 18px); }
 @media (max-width: 640px) {
   #room > .bubble { font-size: 0.8rem; padding: 0.4rem 0.55rem; }
 }
 
 /* ---------- window, pager buzz ---------- */
 #room > .win { background: none; }
+#room > .flash { left: 0; top: 0; width: 100%; height: 100%; }
 
 /* ---------- whiteboard numbers (desktop; the panel carries the same facts) ---------- */
-.board-overlay {
-  position: absolute; left: calc(var(--s) * 1px); top: calc(var(--s) * 1px);
-  width: calc(var(--s) * 50px); height: calc(var(--s) * 29px);
-  padding: calc(var(--s) * 1.5px) calc(var(--s) * 2.5px); background: #f4f2ee; overflow: hidden; pointer-events: none;
+.board-overlay { /* laid out at the board's 52x34 sprite size, then pinned onto its 3D face by room.js */
+  position: absolute; left: 0; top: 0; transform-origin: 0 0;
+  width: calc(var(--s) * 52px); height: calc(var(--s) * 34px);
+  padding: calc(var(--s) * 2.5px) calc(var(--s) * 3.5px); background: #f4f2ee; overflow: hidden; pointer-events: none;
   font: 600 calc(var(--s) * 3.7px)/1.45 var(--font-mono); color: #1f4e8a; text-align: left;
 }
 .board-title { display: block; margin-bottom: calc(var(--s) * 0.5px); font-size: calc(var(--s) * 2.6px); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }

@@ -71,19 +71,9 @@ export function findPath(grid, from, to, { diagonal = false } = {}) {
 }
 
 // Base speed for short walks; long walks speed up so no walk takes more than 1.2 s.
-export const BASE_SPEED = 48;     // native px per second
+export const BASE_SPEED = 48;     // world units (sprite pixels) per second
 export const MAX_WALK_S = 1.2;
 export function walkSpeed(pathLength) { return Math.max(BASE_SPEED, pathLength / MAX_WALK_S); }
 
 // Each walk gets an id; a walk loop stops as soon as a newer id exists (re-targeting).
 export function nextWalkId(current) { return current + 1; }
-
-export const NATIVE_W = 240;
-export const NATIVE_H = 135;
-
-// Desktop: the largest whole-number scale that fits under the HUD (crisp pixels).
-// Phones: fill the width, accepting slightly uneven pixels.
-export function fitScale(vw, vh, hudH, isPhone) {
-  if (isPhone) return vw / NATIVE_W;
-  return Math.max(1, Math.floor(Math.min(vw / NATIVE_W, (vh - hudH) / NATIVE_H)));
-}

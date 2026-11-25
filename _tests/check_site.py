@@ -771,11 +771,12 @@ def test_game_budget():
 
 def test_game_life():
     js = (ROOT / "assets" / "game" / "room.js").read_text(encoding="utf-8")
+    tim_js = (ROOT / "assets" / "game" / "tim.js").read_text(encoding="utf-8")
     css = (ROOT / "assets" / "game" / "room.css").read_text(encoding="utf-8")
     problems = []
     if "Hey, I\u2019m Tim" not in js and "Hey, I'm Tim" not in js:
         problems.append("no welcome bubble copy")
-    if "'tim_wave'" not in js or "wave" not in js.split("export function init(")[-1]:
+    if "'tim_wave'" not in js + tim_js or "wave" not in js.split("export function init(")[-1]:
         problems.append("Tim does not wave on load")
     if "document.hidden" not in js:
         problems.append("idle timers do not pause when the tab is hidden")

@@ -2,7 +2,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PALETTE, SPRITES, WINDOW, EMOTES, validateSprite } from '../assets/game/sprites.js';
-import { NATIVE_W, NATIVE_H } from '../assets/game/grid.js';
 
 const OBJECT_IDS = ['pennant', 'map', 'whiteboard', 'laptop', 'pager', 'logbook', 'toolbox', 'plaque', 'keys', 'camera', 'rack', 'mailbox'];
 const GAME_PANELS = ['rack']; // objects whose panel is a mini-game, not story content
@@ -24,20 +23,13 @@ test('validateSprite catches bad rows and unknown palette keys', () => {
 });
 
 test('required sprites exist', () => {
-  const required = ['room', ...OBJECT_IDS, 'desk', 'shelf', 'rug', 'mug', 'sofa', 'plant', 'pendant', ...TIM_SHEETS,
+  const required = ['wall_back', 'wall_left', 'floor', ...OBJECT_IDS, 'desk', 'shelf', 'rug', 'mug', 'sofa', 'plant', 'pendant', ...TIM_SHEETS,
     ...OBJECT_IDS.map((id) => `icon_${id}`)];
   for (const key of required) assert.ok(SPRITES[key], `missing sprite ${key}`);
 });
 
-test('room is 240x135 and matches the native size', () => {
-  assert.equal(SPRITES.room.w, 240);
-  assert.equal(SPRITES.room.h, 135);
-  assert.equal(NATIVE_W, 240);
-  assert.equal(NATIVE_H, 135);
-});
-
 test('the window fits inside the room', () => {
-  assert.ok(WINDOW.x >= 0 && WINDOW.y >= 0 && WINDOW.x + WINDOW.w <= NATIVE_W && WINDOW.y + WINDOW.h <= 72, JSON.stringify(WINDOW));
+  assert.ok(WINDOW.x >= 0 && WINDOW.y >= 0 && WINDOW.x + WINDOW.w <= 240 && WINDOW.y + WINDOW.h <= 72, JSON.stringify(WINDOW));
 });
 
 test('tim frames share one size and have the right counts', () => {
@@ -503,4 +495,11 @@ test('the room shell has wall and floor textures at world size', () => {
   assert.deepEqual([SPRITES.wall_back.w, SPRITES.wall_back.h], [240, 72]);
   assert.deepEqual([SPRITES.wall_left.w, SPRITES.wall_left.h], [112, 72]);
   assert.deepEqual([SPRITES.floor.w, SPRITES.floor.h], [240, 112]);
+});
+
+test('the 2D room backdrop and native-size scaling are gone', async () => {
+  assert.equal(SPRITES.room, undefined);
+  const grid = await import('../assets/game/grid.js');
+  assert.equal(grid.fitScale, undefined);
+  assert.equal(grid.NATIVE_W, undefined);
 });

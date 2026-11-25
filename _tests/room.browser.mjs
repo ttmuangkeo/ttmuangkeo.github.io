@@ -39,7 +39,14 @@ async function open({ w = 1280, h = 800, mobile = false, before = '', path = '',
   injected = (await send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__errs = []; addEventListener('error', (e) => window.__errs.push(String(e.message))); addEventListener('unhandledrejection', (e) => window.__errs.push(String(e.reason))); try { localStorage.clear(); } catch {} ${before}` })).identifier;
   await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: dpr, mobile });
   await send('Page.navigate', { url: 'about:blank' }); await sleep(150);
-  await send('Page.navigate', { url: BASE + path }); await sleep(1500);
+  await send('Page.navigate', { url: BASE + path });
+  // wait for the room (or the world test page, or the fallback) to finish starting, then let it settle
+  for (let i = 0; i < 80; i++) {
+    await sleep(100);
+    const up = await ev(`document.readyState === 'complete' && (document.documentElement.classList.contains('game-ready') || !!window.__world || !!window.__worldError || !document.getElementById('room') || (performance.now() > 6000))`);
+    if (up) break;
+  }
+  await sleep(700);
 }
 const panel = () => ev(`({ open: document.getElementById('panel').open, obj: document.getElementById('panel').dataset.object })`);
 
@@ -67,7 +74,7 @@ await scenario('clicking a new object during a use animation opens the new panel
   await open();
   await ev(`document.querySelector('[data-object="logbook"]').click()`);
   // wait until Tim stands at the logbook spot, then click the mailbox mid-animation
-  for (let i = 0; i < 60; i++) { if ((await ev(`(() => { const t = document.querySelector('.tim').style; return t.getPropertyValue('--x') + ',' + t.getPropertyValue('--y'); })()`)) === '79,68') break; await sleep(40); } // 79,68: Tim at the binder's use spot (10,10)
+  for (let i = 0; i < 60; i++) { if ((await ev(`(() => { const t = document.getElementById('room').scene.tim; const c = t.cell(); return !t.walking && c.col === 10 && c.row === 1; })()`))) break; await sleep(40); } // Tim at the binder's use spot (10,1)
   await sleep(150);
   await ev(`document.querySelector('[data-object="mailbox"]').click()`);
   for (let i = 0; i < 35; i++) {
@@ -304,13 +311,78 @@ await scenario('every one of the twelve objects opens a panel with content', asy
   return bad.length || errs.length ? JSON.stringify({ bad, errs }) : '';
 });
 
-// ---------- the 3D world on its own test page ----------
 const WORLD = '_tests/world.html';
 // Distinct colours in a canvas, read through a 2D copy.
 const colours = (sel) => `(() => { const src = ${sel}; const c = document.createElement('canvas'); c.width = src.width; c.height = src.height; const x = c.getContext('2d'); x.drawImage(src, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; const s = new Set(); for (let i = 0; i < d.length; i += 4) s.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]); return s.size; })()`;
 // Client point of a render-pixel point in the world canvas.
 const CLIENT = `const client = (w, p) => { const r = w.canvas.getBoundingClientRect(); const k = r.width / w.frame.renderW; return [r.left + p.x * k, r.top + p.y * k]; };`;
 
+// ---------- the homepage in 3D ----------
+const SCENE = `document.getElementById('room').scene`;
+const clickAt = async (x, y, button = 'left') => {
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button, clickCount: 1 });
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button, clickCount: 1 });
+};
+
+await scenario('the homepage renders a non-blank 3D frame', async () => {
+  await open();
+  const n = await ev(colours(`document.querySelector('#room canvas.world')`));
+  return n > 40 ? '' : `only ${n} colours`;
+});
+
+await scenario('with WebGL unavailable the static fallback stays, with no errors', async () => {
+  await open({ before: `const gc = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (t, ...a) { return /webgl/.test(t) ? null : gc.call(this, t, ...a); };` });
+  const r = await ev(`({ ready: document.documentElement.classList.contains('game-ready'), fallback: getComputedStyle(document.querySelector('.fallback')).display !== 'none', errs: window.__errs })`);
+  return !r.ready && r.fallback && !r.errs.length ? '' : JSON.stringify(r);
+});
+
+await scenario('a floor click walks Tim there', async () => {
+  await open();
+  const [x, y] = await ev(`(() => { ${CLIENT} const w = ${SCENE}.world; return client(w, w.project({ x: 5 * 8 + 4, y: 0, z: 11 * 8 + 4 })); })()`);
+  await clickAt(x, y);
+  for (let i = 0; i < 25; i++) {
+    await sleep(100);
+    const c = await ev(`${SCENE}.tim.cell()`);
+    if (c.col === 5 && c.row === 11) return '';
+  }
+  return `Tim is at ${JSON.stringify(await ev(`${SCENE}.tim.cell()`))}`;
+});
+
+await scenario('after a resize every object button still sits over its prop', async () => {
+  await open({ w: 1280, h: 800 });
+  const check = () => ev(`(() => { ${CLIENT} const w = ${SCENE}.world; return [...document.querySelectorAll('#room .obj')].map((b) => {
+    const [x, y] = client(w, w.project(w.anchorOf(b.dataset.object))); const r = b.getBoundingClientRect();
+    return x >= r.left - 1 && x <= r.right + 1 && y >= r.top - 1 && y <= r.bottom + 1 ? '' : b.dataset.object; }).filter(Boolean); })()`);
+  for (const [w, h, mobile] of [[900, 700, false], [375, 812, true]]) {
+    await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
+    await sleep(600);
+    const bad = await check();
+    if (bad.length) return `${w}px: ${bad.join(', ')}`;
+  }
+  return '';
+});
+
+await scenario('the whiteboard numbers are big enough to read on a laptop', async () => {
+  await open({ w: 1280, h: 720 });
+  await sleep(600);
+  const r = await ev(`({ board: document.querySelector('[data-object="whiteboard"]').getBoundingClientRect().height, lines: [...document.querySelectorAll('#room .board-line')].map((l) => l.getBoundingClientRect().height) })`);
+  return r.board >= 60 && r.lines.length === 4 && r.lines.every((h) => h >= 9) ? '' : JSON.stringify(r);
+});
+
+await scenario('hovering an object highlights its prop', async () => {
+  await open();
+  const bright = () => ev(`(() => { const w = ${SCENE}.world; w.renderNow(); const b = w.rectOf('map'); const c = document.createElement('canvas'); c.width = w.canvas.width; c.height = w.canvas.height; const x = c.getContext('2d'); x.drawImage(w.canvas, 0, 0);
+    const d = x.getImageData(Math.round(b.x), Math.round(b.y), Math.max(1, Math.round(b.w)), Math.max(1, Math.round(b.h))).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i] + d[i + 1] + d[i + 2]; return s / (d.length / 4); })()`);
+  const before = await bright();
+  await ev(`document.querySelector('[data-object="map"]').dispatchEvent(new PointerEvent('pointerenter'))`); await sleep(100);
+  const lit = await bright();
+  await ev(`document.querySelector('[data-object="map"]').dispatchEvent(new PointerEvent('pointerleave'))`); await sleep(100);
+  const after = await bright();
+  return lit > before + 2 && Math.abs(after - before) < 1 ? '' : JSON.stringify({ before, lit, after });
+});
+
+// ---------- the 3D world on its own test page ----------
 await scenario('world: renders a non-blank frame', async () => {
   await open({ path: WORLD });
   const err = await ev(`window.__worldError || ''`);
