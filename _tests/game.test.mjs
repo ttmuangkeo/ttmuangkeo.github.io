@@ -461,3 +461,17 @@ test('diagonal findPath prefers straight runs over zigzags of equal cost', () =>
   const path = findPath(g, { col: 0, row: 1 }, { col: 5, row: 1 }, { diagonal: true });
   assert.ok(path.every((p) => p.row === 1), JSON.stringify(path));
 });
+
+// ---------- lighting ----------
+import { lightFor } from '../assets/game/sky.js';
+test('lightFor follows the Seattle sky', () => {
+  const day = lightFor({ phase: 'day' }), dawn = lightFor({ phase: 'dawn' }), night = lightFor({ phase: 'night' });
+  assert.ok(day.sun.intensity > dawn.sun.intensity && dawn.sun.intensity > night.sun.intensity);
+  assert.ok(night.lamps > day.lamps);
+  assert.ok(lightFor({ phase: 'day', rain: true }).sun.intensity < day.sun.intensity);
+  const warm = (c) => ((c >> 16) & 255) - (c & 255);
+  assert.ok(warm(dawn.sun.color) > warm(day.sun.color), 'dawn light is warmer');
+  assert.equal(day.tint, null);
+  const a = lightFor({ phase: 'night', aurora: true }).tint;
+  assert.ok(a !== null && ((a >> 8) & 255) > ((a >> 16) & 255), 'aurora tint is green-led');
+});

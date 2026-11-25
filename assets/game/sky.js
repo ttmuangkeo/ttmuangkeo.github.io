@@ -45,3 +45,23 @@ export function skyNow(date = new Date()) {
   const rain = isRaining(date, month);
   return { phase, rain, label, text: `Seattle · ${label} · ${rain ? 'raining' : WORDS[phase]}` };
 }
+
+// How the room is lit for a sky phase: the sun through the window, the fill light,
+// the desk lamps and monitors (brighter after dark), and an optional colour tint.
+const LIGHT = {
+  dawn: { sun: [0xffb07a, 0.9], ambient: [0xe9d6d0, 0.55], lamps: 0.6 },
+  day: { sun: [0xfff4e2, 1.6], ambient: [0xf2efe8, 0.8], lamps: 0.15 },
+  dusk: { sun: [0xff9a5c, 0.8], ambient: [0xd9c2c8, 0.5], lamps: 0.7 },
+  night: { sun: [0x6f85c9, 0.25], ambient: [0x5a6488, 0.35], lamps: 1.2 },
+};
+const AURORA_TINT = 0x6fe0a8;
+
+export function lightFor({ phase, rain = false, aurora = false }) {
+  const l = LIGHT[phase] ?? LIGHT.day;
+  return {
+    sun: { color: l.sun[0], intensity: l.sun[1] * (rain ? 0.55 : 1) },
+    ambient: { color: l.ambient[0], intensity: l.ambient[1] * (rain ? 0.9 : 1) },
+    lamps: l.lamps + (rain ? 0.2 : 0),
+    tint: aurora ? AURORA_TINT : null,
+  };
+}
