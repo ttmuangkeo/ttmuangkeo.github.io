@@ -311,34 +311,97 @@ function drawRug() {               // big cream rug
   return frame(g);
 }
 
-// ---------- mini Tim (10x20): short black hair, green rain jacket, tan boots ----------
-const HEAD_DOWN = ['...HHHH...', '..HHHHHH..', '..HHHHHH..', '..HssssH..', '..sKssKs..', '..ssssss..', '...sSSs...'];
-const HEAD_UP = ['...HHHH...', '..HHHHHH..', '..HHHHHH..', '..HHHHHH..', '..HHHHHH..', '..sHHHHs..', '...sSSs...'];
-const HEAD_SIDE = ['...HHHH...', '..HHHHHH..', '..HHHHHH..', '..ssHHHH..', '..sKsHHH..', '..ssssHH..', '...sSs....'];
-const BODY = ['..gggggg..', '.gggGGggg.', '.ggggGggg.', '.ggggGggg.', '.sggGGggs.'];
-const BODY_SIDE = ['...gggg...', '..gggggg..', '..ggGggg..', '..ggGggg..', '..gsGggg..'];
-const HIPS = ['..nnnnnn..', '..nnnnnn..', '..nnNNnn..'];
-const HIPS_SIDE = ['...nnnn...', '...nnnn...', '...nnNn...'];
-const LEGS = {
-  stand: ['..nn..nn..', '..nn..nn..', '..nn..nn..', '.ttt..ttt.', '.ttt..ttt.'],
-  stepL: ['..nn..nn..', '.nn....nn.', '.nn....nn.', 'ttt....ttt', '..........'],
-  stepR: ['..nn..nn..', '...nnnn...', '...nnnn...', '..tt..tt..', '..tt..tt..'],
-  side0: ['...n..n...', '..n....n..', '..n....n..', '.tt...tt..', '..........'],
-  side1: ['...nnnn...', '...nnnn...', '...nn.n...', '...ttttt..', '..........'],
-};
-const tim = (head, body, hips, legs) => [...head, ...body, ...hips, ...legs];
-const BREATHE = ['..gggggg..', '.gggggggg.', '.ggggGggg.', '.ggggGggg.', '.sggGGggs.'];
-const USE_0 = ['..gggggg..', '.gggGGggg.', 'sggggGggs.', '.ggggGggg.', '..ggGGgg..'];
-const USE_1 = ['s.gggggg.s', 'sgggGGgggs', '.ggggGggg.', '.ggggGggg.', '..ggGGgg..'];
-const WAVE_0 = ['..gggggg.s', '.gggGGgggs', '.ggggGggg.', '.ggggGggg.', '.sggGGgg..'];
-const WAVE_1 = ['..gggggg..', '.gggGGggg.s', '.ggggGgggs', '.ggggGggg.', '.sggGGgg..'].map((r) => r.slice(0, 10));
+// ---------- chibi Tim (24x36): big head, short black hair, green rain jacket, tan boots ----------
+// Built from parts so every pose shares one silhouette. view: 'down' (front), 'up' (back), 'side' (facing left).
+function timHead(g, view, oy) {
+  const row = (y, x0, x1, c) => rect(g, x0, y + oy, x1 - x0 + 1, 1, c);
+  row(0, 7, 16, 'k'); row(1, 5, 18, 'k'); row(1, 7, 16, 'H');
+  row(2, 4, 19, 'k'); row(2, 5, 18, 'H');
+  for (let y = 3; y <= 9; y++) { row(y, 3, 20, 'k'); row(y, 4, 19, 'H'); }
+  row(10, 4, 19, 'k'); row(11, 4, 19, 'k'); row(12, 5, 18, 'k'); row(13, 7, 16, 'k');
+  if (view === 'up') {                       // back of the head: all hair, a little neck
+    row(10, 5, 18, 'H'); row(11, 5, 18, 'H'); row(12, 6, 17, 'H'); row(13, 8, 15, 'S');
+    row(4, 9, 13, 'c'); // hair shine
+    return;
+  }
+  if (view === 'side') {                     // facing left: face on the left, hair wraps the back
+    row(6, 4, 11, 's'); row(7, 4, 12, 's'); row(8, 3, 12, 's'); row(9, 3, 12, 's');
+    row(10, 5, 12, 's'); row(10, 13, 18, 'H'); row(11, 5, 12, 's'); row(11, 13, 18, 'H');
+    row(12, 6, 13, 's'); row(12, 14, 17, 'H'); row(13, 8, 13, 'S');
+    px(g, 13, 8 + oy, 's'); px(g, 13, 9 + oy, 'S');           // ear
+    px(g, 6, 8 + oy, 'K'); px(g, 6, 9 + oy, 'K'); px(g, 6, 8 + oy, 'K');
+    px(g, 7, 11 + oy, 'J'); px(g, 4, 11 + oy, 'S');
+    row(3, 8, 12, 'c');
+    return;
+  }
+  // front: fringe, two eyes, blush, a small smile
+  row(6, 7, 16, 's'); row(6, 10, 12, 'H');
+  row(7, 6, 17, 's'); row(8, 5, 18, 's'); row(9, 5, 18, 's');
+  row(10, 5, 18, 's'); row(11, 5, 18, 's'); row(12, 6, 17, 's'); row(13, 8, 15, 'S');
+  px(g, 4, 8 + oy, 's'); px(g, 19, 8 + oy, 's');            // ears
+  for (const x of [8, 15]) { px(g, x, 8 + oy, 'K'); px(g, x, 9 + oy, 'K'); }
+  px(g, 7, 11 + oy, 'J'); px(g, 16, 11 + oy, 'J');
+  px(g, 11, 11 + oy, 'S'); px(g, 12, 11 + oy, 'S');
+  row(3, 8, 12, 'B');
+}
+function timBody(g, view, arms, oy) {
+  const side = view === 'side';
+  const [x0, x1] = side ? [8, 15] : [6, 17];
+  rect(g, x0 - 1, 14 + oy, x1 - x0 + 3, 12 - oy, 'k');
+  rect(g, x0, 15 + oy, x1 - x0 + 1, 10 - oy, 'g');
+  rect(g, x0, 15 + oy, x1 - x0 + 1, 1, 'G');                  // collar shadow
+  if (view === 'down') rect(g, 11, 16 + oy, 2, 9 - oy, 'G');  // zipper
+  if (side) rect(g, 12, 16 + oy, 1, 8 - oy, 'G');
+  const arm = (x, y0, y1) => { rect(g, x - 1, y0 - 1, 4, y1 - y0 + 3, 'k'); rect(g, x, y0, 2, y1 - y0 + 1, 'g'); rect(g, x, y1 + 1, 2, 1, 's'); };
+  if (side) { arm(11, 16 + oy, 22); return; }
+  const L = 4, R = 18;
+  if (arms === 'use0') { arm(L, 11, 16); arm(R, 11, 16); return; }
+  if (arms === 'use1') { arm(L, 10, 15); arm(R, 12, 17); return; }
+  arm(L, 16 + oy, 22);
+  if (arms === 'wave0') arm(R, 9, 14);
+  else if (arms === 'wave1') { arm(R + 1, 8, 13); }
+  else arm(R, 16 + oy, 22);
+}
+function timLegs(g, view, legs) {
+  rect(g, 6, 25, 12, 4, 'k'); rect(g, 7, 25, 10, 3, 'n'); rect(g, 11, 26, 2, 2, 'N');
+  const leg = (x, top, len) => {
+    rect(g, x - 1, top, 6, len + 4, 'k');
+    rect(g, x, top, 4, len, 'n');
+    rect(g, x, top + len, 4, 2, 't'); rect(g, x - 1 + (x < 12 ? 0 : 1), top + len + 1, 5, 2, 't');
+    rect(g, x, top + len, 4, 1, 'T');
+  };
+  if (view === 'side') {
+    if (legs === 'side1') { leg(10, 28, 3); return; }
+    leg(8, 28, 3); leg(13, 28, 2); return;
+  }
+  if (legs === 'stepL') { leg(6, 28, 3); leg(14, 27, 2); return; }
+  if (legs === 'stepR') { leg(7, 27, 2); leg(13, 28, 3); return; }
+  leg(7, 28, 3); leg(13, 28, 3);
+}
+function timFrame(view, legs = 'stand', arms = 'down', bob = 0) {
+  const g = grid(24, 36);
+  timLegs(g, view, legs);
+  timBody(g, view, arms, bob);
+  timHead(g, view, bob);
+  return frame(g);
+}
+const walkSide = ['side0', 'side1', 'side0', 'side1'].map((l, i) => timFrame('side', l, 'down', i % 2));
 
-const walkSide = [
-  tim(HEAD_SIDE, BODY_SIDE, HIPS_SIDE, LEGS.side0),
-  tim(HEAD_SIDE, BODY_SIDE, HIPS_SIDE, LEGS.side1),
-  tim(HEAD_SIDE, BODY_SIDE, HIPS_SIDE, LEGS.side0),
-  tim(HEAD_SIDE, BODY_SIDE, HIPS_SIDE, LEGS.side1),
-];
+// ---------- emotes (11x11): a small speech bubble with an icon ----------
+export const EMOTES = ['alert', 'heart', 'dots', 'note', 'zzz'];
+function emote(draw) {
+  const g = grid(11, 11);
+  box(g, 0, 0, 11, 9, 'Y', 'k'); rect(g, 3, 9, 2, 1, 'k'); px(g, 3, 10, 'k'); px(g, 4, 8, 'Y');
+  draw(g);
+  return sheet(11, 11, [frame(g)]);
+}
+const EMOTE_ART = {
+  alert: (g) => { rect(g, 5, 1, 1, 4, 'x'); rect(g, 4, 2, 3, 2, 'x'); px(g, 5, 6, 'x'); },
+  heart: (g) => { rect(g, 2, 2, 3, 2, 'x'); rect(g, 6, 2, 3, 2, 'x'); rect(g, 2, 3, 7, 2, 'x'); rect(g, 3, 5, 5, 1, 'x'); px(g, 5, 6, 'x'); px(g, 3, 2, 'J'); },
+  dots: (g) => { [2, 5, 8].forEach((x) => px(g, x, 4, 'K')); },
+  note: (g) => { rect(g, 5, 1, 1, 5, 'K'); rect(g, 5, 1, 3, 1, 'K'); px(g, 7, 2, 'K'); rect(g, 3, 5, 2, 2, 'K'); },
+  zzz: (g) => { rect(g, 2, 2, 4, 1, 'a'); px(g, 4, 3, 'a'); px(g, 3, 4, 'a'); rect(g, 2, 5, 4, 1, 'a'); rect(g, 6, 4, 3, 1, 'a'); px(g, 7, 5, 'a'); rect(g, 6, 6, 3, 1, 'a'); },
+};
 
 // ---------- 16x16 tray icons ----------
 function icon(draw) { const g = grid(16, 16); draw(g); return sheet(16, 16, [frame(g)]); }
@@ -370,13 +433,13 @@ export const SPRITES = {
   pendant: sheet(9, 11, [drawPendant()]),
   rug: sheet(120, 24, [drawRug()]),
 
-  tim_idle_down: sheet(10, 20, [tim(HEAD_DOWN, BODY, HIPS, LEGS.stand), tim(HEAD_DOWN, BREATHE, HIPS, LEGS.stand)]),
-  tim_walk_down: sheet(10, 20, [LEGS.stand, LEGS.stepL, LEGS.stand, LEGS.stepR].map((l) => tim(HEAD_DOWN, BODY, HIPS, l))),
-  tim_walk_up: sheet(10, 20, [LEGS.stand, LEGS.stepL, LEGS.stand, LEGS.stepR].map((l) => tim(HEAD_UP, BODY, HIPS, l))),
-  tim_walk_left: sheet(10, 20, walkSide),
-  tim_walk_right: sheet(10, 20, walkSide.map(mirror)),
-  tim_use: sheet(10, 20, [tim(HEAD_UP, USE_0, HIPS, LEGS.stand), tim(HEAD_UP, USE_1, HIPS, LEGS.stand)]),
-  tim_wave: sheet(10, 20, [tim(HEAD_DOWN, WAVE_0, HIPS, LEGS.stand), tim(HEAD_DOWN, WAVE_1, HIPS, LEGS.stand)]),
+  tim_idle_down: sheet(24, 36, [timFrame('down'), timFrame('down', 'stand', 'down', 1)]),
+  tim_walk_down: sheet(24, 36, ['stand', 'stepL', 'stand', 'stepR'].map((l, i) => timFrame('down', l, 'down', i % 2))),
+  tim_walk_up: sheet(24, 36, ['stand', 'stepL', 'stand', 'stepR'].map((l, i) => timFrame('up', l, 'down', i % 2))),
+  tim_walk_left: sheet(24, 36, walkSide),
+  tim_walk_right: sheet(24, 36, walkSide.map(mirror)),
+  tim_use: sheet(24, 36, [timFrame('up', 'stand', 'use0'), timFrame('up', 'stand', 'use1')]),
+  tim_wave: sheet(24, 36, [timFrame('down', 'stand', 'wave0'), timFrame('down', 'stand', 'wave1')]),
 
   icon_pennant: icon((g) => { box(g, 0, 1, 16, 13, 'p', '8'); for (let y = 0; y < 9; y++) rect(g, 2, 3 + y, Math.max(1, Math.round(12 * (1 - Math.abs(y - 4) / 5))), 1, 'a'); [[4, 6], [6, 6], [7, 7], [9, 7]].forEach(([x, y]) => px(g, x, y, 'y')); }),
   icon_map: icon((g) => { box(g, 0, 2, 16, 12, '9', '8'); rect(g, 1, 3, 14, 10, 'p'); [[3, 5], [5, 7], [7, 6], [9, 9], [11, 8]].forEach(([x, y]) => px(g, x, y, 'r')); rect(g, 2, 4, 2, 2, 'K'); rect(g, 12, 9, 2, 2, 'K'); }),
@@ -396,6 +459,8 @@ for (const phase of SKY_PHASES) {
   SPRITES[`window_${phase}`] = sheet(WINDOW.w, WINDOW.h, [drawWindow(phase, 0), drawWindow(phase, 1)]);
   if (phase !== 'aurora') SPRITES[`window_${phase}_rain`] = sheet(WINDOW.w, WINDOW.h, [drawWindow(phase, 0, true), drawWindow(phase, 1, true)]);
 }
+
+for (const k of EMOTES) SPRITES[`emote_${k}`] = emote(EMOTE_ART[k]);
 
 export function validateSprite(s) {
   const problems = [];

@@ -1,7 +1,7 @@
 // Unit tests for the pixel-room game logic. Run: node --test _tests/
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PALETTE, SPRITES, WINDOW, validateSprite } from '../assets/game/sprites.js';
+import { PALETTE, SPRITES, WINDOW, EMOTES, validateSprite } from '../assets/game/sprites.js';
 import { NATIVE_W, NATIVE_H } from '../assets/game/grid.js';
 
 const OBJECT_IDS = ['pennant', 'map', 'whiteboard', 'laptop', 'pager', 'logbook', 'toolbox', 'plaque', 'keys', 'camera', 'rack', 'mailbox'];
@@ -42,6 +42,7 @@ test('the window fits inside the room', () => {
 
 test('tim frames share one size and have the right counts', () => {
   const { w, h } = SPRITES.tim_idle_down;
+  assert.deepEqual([w, h], [24, 36], 'chibi Tim is 24x36');
   for (const key of TIM_SHEETS) {
     assert.equal(SPRITES[key].w, w, key);
     assert.equal(SPRITES[key].h, h, key);
@@ -474,4 +475,20 @@ test('lightFor follows the Seattle sky', () => {
   assert.equal(day.tint, null);
   const a = lightFor({ phase: 'night', aurora: true }).tint;
   assert.ok(a !== null && ((a >> 8) & 255) > ((a >> 16) & 255), 'aurora tint is green-led');
+});
+
+// ---------- chibi Tim and emotes ----------
+test('every emote is an 11x11 sprite', () => {
+  assert.deepEqual(EMOTES, ['alert', 'heart', 'dots', 'note', 'zzz']);
+  for (const k of EMOTES) {
+    const s = SPRITES[`emote_${k}`];
+    assert.ok(s, k); assert.equal(s.w, 11, k); assert.equal(s.h, 11, k);
+    assert.deepEqual(validateSprite(s), [], k);
+  }
+});
+test('chibi Tim has a big head with hair and eyes', () => {
+  for (const key of TIM_SHEETS) for (const f of SPRITES[key].frames)
+    assert.ok(f.slice(0, 14).some((row) => row.includes('H')), `${key} has no hair in the top 40%`);
+  const eyes = SPRITES.tim_idle_down.frames[0].slice(8, 14).join('').split('').filter((c) => c === 'K').length;
+  assert.ok(eyes >= 2, `eyes: ${eyes}`);
 });
