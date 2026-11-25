@@ -444,3 +444,20 @@ test('quadMatrix maps the rectangle corners onto the quad', () => {
   });
   assert.match(V.quadTransform(52, 34, quad), /^matrix3d\(([-\d.e]+,\s*){15}[-\d.e]+\)$/);
 });
+
+// ---------- diagonal paths ----------
+test('diagonal findPath takes the diagonal across open floor', () => {
+  const g = buildGrid(5, 5, []);
+  assert.deepEqual(findPath(g, { col: 0, row: 0 }, { col: 3, row: 3 }, { diagonal: true }),
+    [{ col: 1, row: 1 }, { col: 2, row: 2 }, { col: 3, row: 3 }]);
+});
+test('diagonal findPath never cuts a blocked corner', () => {
+  const g = buildGrid(3, 3, [[1, 0]]);
+  const path = findPath(g, { col: 0, row: 0 }, { col: 1, row: 1 }, { diagonal: true });
+  assert.deepEqual(path, [{ col: 0, row: 1 }, { col: 1, row: 1 }]);
+});
+test('diagonal findPath prefers straight runs over zigzags of equal cost', () => {
+  const g = buildGrid(6, 3, []);
+  const path = findPath(g, { col: 0, row: 1 }, { col: 5, row: 1 }, { diagonal: true });
+  assert.ok(path.every((p) => p.row === 1), JSON.stringify(path));
+});
