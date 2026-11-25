@@ -44,9 +44,13 @@ async function open({ w = 1280, h = 800, mobile = false, before = '' } = {}) {
 const panel = () => ev(`({ open: document.getElementById('panel').open, obj: document.getElementById('panel').dataset.object })`);
 
 const results = [];
+const ONLY = process.env.ONLY; // ONLY="part of a name" runs just the matching scenarios
 async function scenario(name, fn) {
+  if (ONLY && !name.includes(ONLY)) return;
+  const t0 = Date.now();
   try { const why = await fn(); results.push([name, !why, why || '']); }
   catch (e) { results.push([name, false, String(e)]); }
+  if (process.env.VERBOSE) console.log(`  ${((Date.now() - t0) / 1000).toFixed(1)}s ${name}`);
 }
 
 await scenario('shift+tab right after opening stays inside the panel', async () => {
@@ -63,7 +67,7 @@ await scenario('clicking a new object during a use animation opens the new panel
   await open();
   await ev(`document.querySelector('[data-object="logbook"]').click()`);
   // wait until Tim stands at the logbook spot, then click the mailbox mid-animation
-  for (let i = 0; i < 60; i++) { if ((await ev(`(() => { const t = document.querySelector('.tim').style; return t.getPropertyValue('--x') + ',' + t.getPropertyValue('--y'); })()`)) === '31,36') break; await sleep(40); }
+  for (let i = 0; i < 60; i++) { if ((await ev(`(() => { const t = document.querySelector('.tim').style; return t.getPropertyValue('--x') + ',' + t.getPropertyValue('--y'); })()`)) === '79,68') break; await sleep(40); } // 79,68: Tim at the binder's use spot (10,10)
   await sleep(150);
   await ev(`document.querySelector('[data-object="mailbox"]').click()`);
   for (let i = 0; i < 35; i++) {
@@ -144,16 +148,15 @@ const reduceMotion = (on) => send('Emulation.setEmulatedMedia', { features: [{ n
 
 await scenario('arrow keys walk Tim and E uses what he is standing next to', async () => {
   await open();
-  const [x0] = await timXY();
-  await hold('ArrowRight', 39, 800);
-  const [x1] = await timXY();
-  if (!(x1 > x0 + 20)) return `Tim did not walk right: ${x0} -> ${x1}`;
-  await hold('ArrowUp', 38, 250);
+  const [, y0] = await timXY();
+  await hold('ArrowUp', 38, 1200); // from the rug straight up to the wall, under the trail map
+  const [, y1] = await timXY();
+  if (!(y1 < y0 - 20)) return `Tim did not walk up: ${y0} -> ${y1}`;
   const tip = await ev(`document.querySelector('#room .tip').hidden ? '' : document.querySelector('#room .tip').textContent`);
-  if (tip !== 'E · Laptop') return `reach hint was ${JSON.stringify(tip)}`;
+  if (tip !== 'E · Trail map') return `reach hint was ${JSON.stringify(tip)}`;
   await key('e', 69); await sleep(2200);
   const p = await panel();
-  return p.open && p.obj === 'laptop' ? '' : `panel ${JSON.stringify(p)}`;
+  return p.open && p.obj === 'map' ? '' : `panel ${JSON.stringify(p)}`;
 });
 
 await scenario('the Konami code brings up the northern lights', async () => {
@@ -184,9 +187,11 @@ await scenario('the pager panel runs a triage ticket to a verdict, then Get in t
 
 await scenario('the pager goes off once per visit and Triage it opens the game', async () => {
   const fast = `const st = window.setTimeout; window.setTimeout = (f, ms, ...a) => st(f, ms === 15000 ? 50 : ms, ...a);`;
-  await open({ before: `try { sessionStorage.clear(); } catch {} ${fast}` });
+  await open({ w: 1280, h: 720, before: `try { sessionStorage.clear(); } catch {} ${fast}` }); // scale 4: least room right of the pager
   const bubble = await ev(`!!document.querySelector('#room .bubble--pager') && document.querySelector('[data-object="pager"]').classList.contains('is-buzzing')`);
   if (!bubble) return 'pager did not buzz';
+  const fit = await ev(`(() => { const b = document.querySelector('#room .bubble--pager').getBoundingClientRect(); const r = document.getElementById('room').getBoundingClientRect(); return { inside: b.left >= r.left && b.right <= r.right && b.top >= r.top, w: Math.round(b.width), h: Math.round(b.height) }; })()`);
+  if (!fit.inside || fit.w < 1.5 * fit.h) return `pager bubble squeezed or outside the room: ${JSON.stringify(fit)}`;
   await ev(`document.querySelector('#room .bubble--pager .bubble-btn--ink').click()`); await sleep(300);
   const p = await panel();
   if (!(p.open && p.obj === 'incident')) return `Triage it opened ${JSON.stringify(p)}`;
@@ -229,8 +234,9 @@ await scenario('the server rack runs the EWS to Graph cutover while the agent vi
 
 await scenario('closing the rack mid-run stops it cleanly, and the Incident log links to it', async () => {
   await open();
-  await ev(`document.querySelector('[data-object="pager"]').click()`); await sleep(1800);
-  const btn = await ev(`[...document.querySelectorAll('#panel .inc-callout button')].map((b) => b.textContent)`);
+  await ev(`document.querySelector('[data-object="pager"]').click()`);
+  let btn = [];
+  for (let i = 0; i < 50 && !btn.length; i++) { await sleep(100); btn = await ev(`[...document.querySelectorAll('#panel .inc-callout button')].map((b) => b.textContent)`); }
   if (!btn.includes('▶ Run the cutover')) return `no cutover callout: ${JSON.stringify(btn)}`;
   await ev(`[...document.querySelectorAll('#panel .inc-callout button')].find((b) => b.textContent === '▶ Run the cutover').click()`); await sleep(300);
   if ((await panel()).obj !== 'rack') return 'callout did not open the rack panel';
@@ -241,10 +247,61 @@ await scenario('closing the rack mid-run stops it cleanly, and the Incident log 
   return !p.open && !errs.length ? '' : `after close: ${JSON.stringify({ p, errs })}`;
 });
 
+await scenario('on phones a tap on the monitors opens the monitors, not the pager', async () => {
+  await open({ w: 375, h: 812, mobile: true });
+  const hit = await ev(`(() => { const r = document.querySelector('[data-object="laptop"]').getBoundingClientRect(); return [0.6, 0.8, 0.95].map((k) => document.elementFromPoint(r.left + r.width * k, r.top + r.height / 2)?.closest('.obj')?.dataset.object); })()`);
+  return hit.every((h) => h === 'laptop') ? '' : `taps hit ${JSON.stringify(hit)}`;
+});
+
 await scenario('the counter and tray count every object', async () => {
   await open({ w: 375, h: 812, mobile: true });
   const r = await ev(`({ hud: document.querySelector('.hud-found').textContent.replace(/\\s+/g, ' ').trim(), tray: document.querySelector('.tray-head').textContent, buttons: document.querySelectorAll('.tray-btn').length, cols: getComputedStyle(document.querySelector('.tray-grid')).gridTemplateColumns.split(' ').length, scroll: document.documentElement.scrollWidth > innerWidth })`);
-  return r.hud === 'Found 0/9' && r.tray.endsWith('0/9') && r.buttons === 9 && r.cols === 3 && !r.scroll ? '' : JSON.stringify(r);
+  return r.hud === 'Found 0/12' && r.tray.endsWith('0/12') && r.buttons === 12 && r.cols === 3 && !r.scroll ? '' : JSON.stringify(r);
+});
+
+await scenario('the whiteboard shows four numbers on desktop and hides on phones', async () => {
+  await open();
+  await sleep(600);
+  const r = await ev(`(() => {
+    const wb = document.querySelector('[data-object="whiteboard"]').getBoundingClientRect();
+    const lines = [...document.querySelectorAll('#room .board-overlay .board-line')];
+    return { n: lines.length, texts: lines.map((l) => l.textContent.trim()),
+      inside: lines.every((l) => { const b = l.getBoundingClientRect(); return b.width > 0 && b.left >= wb.left && b.right <= wb.right && b.top >= wb.top && b.bottom <= wb.bottom; }) };
+  })()`);
+  if (r.n !== 4 || r.texts.some((t) => !t) || !r.inside) return `desktop ${JSON.stringify(r)}`;
+  await open({ w: 375, h: 812, mobile: true });
+  await sleep(600);
+  const shown = await ev(`(() => { const o = document.querySelector('#room .board-overlay'); return !!o && getComputedStyle(o).display !== 'none' && o.getBoundingClientRect().width > 0; })()`);
+  return shown ? 'overlay visible on a phone' : '';
+});
+
+await scenario('the room fits a 1280x720 laptop with no scrolling', async () => {
+  await open({ w: 1280, h: 720 });
+  const r = await ev(`({ h: document.documentElement.scrollHeight, w: document.documentElement.scrollWidth, ih: innerHeight, iw: innerWidth })`);
+  return r.h <= r.ih && r.w <= r.iw ? '' : JSON.stringify(r);
+});
+
+await scenario('a failed story fetch leaves the whiteboard empty without errors', async () => {
+  await open({ before: `const f = window.fetch; window.fetch = (u, o) => String(u).includes('/story/') ? Promise.reject(new Error('offline')) : f(u, o);` });
+  await sleep(600);
+  const r = await ev(`({ errs: window.__errs, text: (document.querySelector('#room .board-overlay')?.textContent || '').trim() })`);
+  return !r.errs.length && !r.text ? '' : JSON.stringify(r);
+});
+
+await scenario('every one of the twelve objects opens a panel with content', async () => {
+  await open();
+  const ids = await ev(`[...document.querySelectorAll('#room .obj')].map((b) => b.dataset.object)`);
+  if (ids.length !== 12) return `${ids.length} objects`;
+  const bad = [];
+  for (const id of ids) {
+    await ev(`document.querySelector('[data-object="${id}"]').click()`);
+    let p = {};
+    for (let i = 0; i < 50; i++) { await sleep(100); p = await ev(`(() => { const d = document.getElementById('panel'); return { open: d.open, obj: d.dataset.object, len: d.querySelector('.panel-body, .inc-log, .mig-log')?.textContent.trim().length || 0, loading: !!d.querySelector('.panel-loading') }; })()`); if (p.open && p.obj === id && p.len > 40 && !p.loading) break; }
+    if (!(p.open && p.obj === id && p.len > 40)) bad.push(`${id}: ${JSON.stringify(p)}`);
+    await key('Escape', 27); await sleep(300);
+  }
+  const errs = await ev(`window.__errs || []`);
+  return bad.length || errs.length ? JSON.stringify({ bad, errs }) : '';
 });
 
 ws.close(); cleanup();

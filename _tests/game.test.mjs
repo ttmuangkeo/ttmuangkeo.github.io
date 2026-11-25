@@ -1,9 +1,10 @@
 // Unit tests for the pixel-room game logic. Run: node --test _tests/
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PALETTE, SPRITES, validateSprite } from '../assets/game/sprites.js';
+import { PALETTE, SPRITES, WINDOW, validateSprite } from '../assets/game/sprites.js';
+import { NATIVE_W, NATIVE_H } from '../assets/game/grid.js';
 
-const OBJECT_IDS = ['pennant', 'map', 'laptop', 'pager', 'logbook', 'keys', 'camera', 'rack', 'mailbox'];
+const OBJECT_IDS = ['pennant', 'map', 'whiteboard', 'laptop', 'pager', 'logbook', 'toolbox', 'plaque', 'keys', 'camera', 'rack', 'mailbox'];
 const GAME_PANELS = ['rack']; // objects whose panel is a mini-game, not story content
 const TIM_SHEETS = ['tim_idle_down', 'tim_walk_down', 'tim_walk_up', 'tim_walk_left', 'tim_walk_right', 'tim_use', 'tim_wave'];
 
@@ -23,14 +24,20 @@ test('validateSprite catches bad rows and unknown palette keys', () => {
 });
 
 test('required sprites exist', () => {
-  const required = ['room', ...OBJECT_IDS, 'desk', 'shelf', 'rug', 'mug', ...TIM_SHEETS,
+  const required = ['room', ...OBJECT_IDS, 'desk', 'shelf', 'rug', 'mug', 'sofa', 'plant', 'pendant', ...TIM_SHEETS,
     ...OBJECT_IDS.map((id) => `icon_${id}`)];
   for (const key of required) assert.ok(SPRITES[key], `missing sprite ${key}`);
 });
 
-test('room is 160x100', () => {
-  assert.equal(SPRITES.room.w, 160);
-  assert.equal(SPRITES.room.h, 100);
+test('room is 240x135 and matches the native size', () => {
+  assert.equal(SPRITES.room.w, 240);
+  assert.equal(SPRITES.room.h, 135);
+  assert.equal(NATIVE_W, 240);
+  assert.equal(NATIVE_H, 135);
+});
+
+test('the window fits inside the room', () => {
+  assert.ok(WINDOW.x >= 0 && WINDOW.y >= 0 && WINDOW.x + WINDOW.w <= NATIVE_W && WINDOW.y + WINDOW.h <= 72, JSON.stringify(WINDOW));
 });
 
 test('tim frames share one size and have the right counts', () => {
@@ -61,17 +68,43 @@ test('palette keys are single characters with "." transparent', () => {
 import { OBJECTS, ROOM } from '../assets/game/objects.js';
 import { fitScale } from '../assets/game/grid.js';
 
-test('OBJECTS has the 9 ids in order', () => {
+test('OBJECTS has the 12 ids in order', () => {
   assert.deepEqual(OBJECTS.map((o) => o.id), OBJECT_IDS);
 });
 
-test("every object's sprite exists and lies inside 160x100", () => {
+test("every object's sprite exists and lies inside the room", () => {
   for (const o of OBJECTS) {
     const s = SPRITES[o.sprite];
     assert.ok(s, `${o.id}: sprite ${o.sprite}`);
-    assert.ok(o.x >= 0 && o.y >= 0 && o.x + s.w <= 160 && o.y + s.h <= 100, `${o.id} out of bounds`);
+    assert.ok(o.x >= 0 && o.y >= 0 && o.x + s.w <= NATIVE_W && o.y + s.h <= NATIVE_H, `${o.id} out of bounds`);
     assert.ok(o.label && o.ariaLabel, `${o.id} needs label and ariaLabel`);
   }
+});
+
+test('the monitors cycle at least three screens and the plant sways', () => {
+  assert.ok(SPRITES.laptop.frames.length >= 3, 'monitor frames');
+  assert.equal(SPRITES.plant.frames.length, 2, 'plant frames');
+});
+
+test('no two objects have use spots within one step of each other', () => {
+  for (const a of OBJECTS) for (const b of OBJECTS) {
+    if (a === b) continue;
+    const d = Math.abs(a.useSpot.col - b.useSpot.col) + Math.abs(a.useSpot.row - b.useSpot.row);
+    assert.ok(d > 2, `${a.id} and ${b.id} use spots are ${d} apart`);
+  }
+});
+
+test('no floor cell is within reach of two objects', () => {
+  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked, ROOM.floorTopRow);
+  for (let c = 0; c < ROOM.cols; c++) for (let r = 0; r < ROOM.rows; r++) {
+    if (!g.walkable(c, r)) continue;
+    const near = OBJECTS.filter((o) => Math.abs(o.useSpot.col - c) + Math.abs(o.useSpot.row - r) <= 1).map((o) => o.id);
+    assert.ok(near.length <= 1, `(${c},${r}) reaches ${near.join(' and ')}`);
+  }
+});
+
+test('the room grid is 30x16 with the floor from row 9', () => {
+  assert.deepEqual([ROOM.cols, ROOM.rows, ROOM.cell, ROOM.floorTopRow], [30, 16, 8, 9]);
 });
 
 test('useSpots are walkable floor cells', () => {
@@ -85,13 +118,14 @@ test('useSpots are walkable floor cells', () => {
 });
 
 test('fitScale on desktop is the largest whole number that fits', () => {
-  assert.equal(fitScale(1280, 800, 48, false), 7);
+  assert.equal(fitScale(1280, 800, 48, false), 5);
+  assert.equal(fitScale(1280, 720, 64, false), 4);
   assert.equal(fitScale(300, 200, 48, false), 1);
   assert.ok(Number.isInteger(fitScale(1920, 1080, 52, false)));
 });
 
 test('fitScale on phones fits the width', () => {
-  assert.equal(fitScale(375, 812, 48, true), 375 / 160);
+  assert.equal(fitScale(375, 812, 48, true), 375 / 240);
 });
 
 // ---------- Task 4: walk grid and pathfinding ----------
@@ -256,7 +290,8 @@ test('skyNow reads Seattle time and rain is stable within an hour', () => {
 
 test('every window sky has a sprite, with rain variants except the aurora', () => {
   for (const p of SKY_PHASES) {
-    assert.equal(SPRITES[`window_${p}`]?.w, 30, p);
+    assert.equal(SPRITES[`window_${p}`]?.w, WINDOW.w, p);
+    assert.equal(SPRITES[`window_${p}`].h, WINDOW.h, p);
     assert.equal(SPRITES[`window_${p}`].frames.length, 2, p);
     assert.equal(Boolean(SPRITES[`window_${p}_rain`]), p !== 'aurora', `${p} rain`);
   }
@@ -275,6 +310,16 @@ test('triage tickets are complete and their scores match their verdicts', () => 
   const panel = createIncidentPanel({ doc: {} });
   assert.equal(typeof panel.render, 'function');
   assert.ok(panel.title && panel.story.startsWith('#'));
+});
+
+test('a visitor who found the 9 old objects still has the 3 new ones to find', () => {
+  const store = memoryStorage();
+  store.setItem('tim-room-found', JSON.stringify(['pennant', 'map', 'laptop', 'pager', 'logbook', 'keys', 'camera', 'rack', 'mailbox']));
+  const s = createFoundState(store);
+  assert.equal(s.count(), 9);
+  assert.equal(s.allFound(), false);
+  ['whiteboard', 'toolbox', 'plaque'].forEach((id) => s.markFound(id));
+  assert.equal(s.allFound(), true);
 });
 
 test('found-state ids come from OBJECTS', () => {

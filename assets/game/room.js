@@ -1,6 +1,6 @@
 // Pixel room homepage: builds the room once JS runs. If anything throws, the static
 // fallback (intro + story link) stays on screen instead of a blank page.
-import { SPRITES, paintSprite } from './sprites.js';
+import { SPRITES, WINDOW as WIN, paintSprite } from './sprites.js';
 import { OBJECTS, DECOR, ROOM } from './objects.js';
 import { fitScale, buildGrid, findPath, nextWalkId, walkSpeed, NATIVE_W, NATIVE_H } from './grid.js';
 import { PANELS } from './panels.js';
@@ -172,7 +172,7 @@ function createProgress(scene) {
   };
 }
 
-// Phone object tray: 8 big icon buttons under the room that work exactly like tapping the object.
+// Phone object tray: one big icon button per object, working exactly like tapping the object.
 function buildTray(scene) {
   const tray = doc.getElementById('tray');
   const head = doc.createElement('p');
@@ -454,6 +454,7 @@ function buildRoom(room) {
     b.setAttribute('aria-label', o.ariaLabel);
     b.append(spriteCanvas(o.sprite));
     place(b, o.x, o.y, s.w, s.h);
+    if (o.above) b.style.zIndex = String(Number(b.style.zIndex) + o.above);
     const show = () => tipFor(o);
     b.addEventListener('pointerenter', show);
     b.addEventListener('focus', show);
@@ -465,8 +466,32 @@ function buildRoom(room) {
   return { buttons, tip, decor, tipAt, tipFor, hideTip: hide };
 }
 
+// ---------- the whiteboard: the four headline numbers, read from the story page ----------
+// Desktop only (CSS hides it on phones). aria-hidden: the whiteboard's panel says the same thing.
+// If the story can't load, the board keeps its sketched lines and nothing is shown.
+function createBoard(scene) {
+  const btn = scene.buttons.find((b) => b.dataset.object === 'whiteboard');
+  if (!btn) return;
+  loadStory().then((story) => {
+    const lines = [...story.querySelectorAll('#features .numbers li[data-board]')].map((li) => li.dataset.board.trim()).filter(Boolean);
+    if (!lines.length) return;
+    const board = doc.createElement('span');
+    board.className = 'board-overlay';
+    board.setAttribute('aria-hidden', 'true');
+    const title = doc.createElement('span');
+    title.className = 'board-title';
+    title.textContent = 'By the numbers';
+    board.append(title, ...lines.slice(0, 4).map((text) => {
+      const line = doc.createElement('span');
+      line.className = 'board-line';
+      line.textContent = text;
+      return line;
+    }));
+    btn.append(board);
+  }).catch(() => {});
+}
+
 // ---------- the window: Seattle's real time of day, rain now and then, a secret aurora ----------
-const WIN = { x: 108, y: 8, w: 30, h: 22 };
 function createWindow(room, scene) {
   const canvas = doc.createElement('canvas');
   canvas.width = WIN.w; canvas.height = WIN.h;
@@ -517,7 +542,7 @@ function createWindow(room, scene) {
       frame = 0;
       draw();
       scene.hideTip();
-      const b = showBubble(room, scene, 'Northern lights! Just like back home in Alaska.', { x: 80, y: 4 });
+      const b = showBubble(room, scene, 'Northern lights! Just like back home in Alaska.', { x: NATIVE_W / 2, y: 4 });
       b.classList.add('bubble--top');
       setTimeout(() => b.remove(), 5000);
       scene.tim.wave();
@@ -588,6 +613,8 @@ function setupKeyboard(scene) {
 
 // ---------- the pager goes off once per visit and invites a triage run ----------
 const PAGE_AFTER_MS = 15_000;
+// On desktop the pager bubble hangs up and to the left of the pager, so it has the room's width to wrap in.
+const pagerRight = () => { const o = OBJECTS.find((obj) => obj.id === 'pager'); return o.x + SPRITES.pager.w; };
 function setupPager(room, scene) {
   const btn = scene.buttons.find((b) => b.dataset.object === 'pager');
   const canvas = btn.querySelector('canvas');
@@ -619,9 +646,8 @@ function setupPager(room, scene) {
       later.addEventListener('click', () => pager.stop());
       const phone = matchMedia(PHONE_QUERY).matches;
       const b = showBubble(room, scene, "Tim's pager is going off. Help him triage the ticket?",
-        phone ? { x: 80, y: 4, actions: [go, later] } : { x: 100, y: 30, actions: [go, later] });
-      b.classList.add('bubble--pager');
-      if (phone) b.classList.add('bubble--top');
+        phone ? { x: NATIVE_W / 2, y: 4, actions: [go, later] } : { x: pagerRight(), y: 64, actions: [go, later] });
+      b.classList.add('bubble--pager', phone ? 'bubble--top' : 'bubble--left');
       return true;
     },
     tick(t) { if (buzzing) draw(t % 2); },
@@ -660,6 +686,7 @@ export function init() {
     scene.progress = createProgress(scene);
     setupHudMenu();
     scene.sky = createWindow(room, scene);
+    createBoard(scene);
     scene.pager = setupPager(room, scene);
     const pagerBtn = scene.buttons.find((b) => b.dataset.object === 'pager');
     const rackBtn = scene.buttons.find((b) => b.dataset.object === 'rack');
@@ -700,7 +727,7 @@ export function init() {
       const resume = doc.createElement('a');
       resume.className = 'bubble-btn'; resume.href = 'assets/Tim_Muangkeo_Resume.pdf'; resume.setAttribute('download', '');
       resume.textContent = 'Download resume';
-      const bubble = showBubble(room, scene, 'You found everything! Want to talk?', { x: 80, y: 4, actions: [contact, resume] });
+      const bubble = showBubble(room, scene, 'You found everything! Want to talk?', { x: NATIVE_W / 2, y: 4, actions: [contact, resume] });
       bubble.classList.add('bubble--top');
       contact.focus();
     };
@@ -741,6 +768,9 @@ export function init() {
     const mug = scene.decor.mug;
     const rackFrames = SPRITES.rack.frames.map((f) => paintSprite(f));
     const rackCanvas = rackBtn?.querySelector('canvas');
+    const laptopBtn = scene.buttons.find((b) => b.dataset.object === 'laptop');
+    const plantFrames = SPRITES.plant.frames.map((f) => paintSprite(f));
+    const plant = scene.decor.plant;
     let tick = 0;
     setInterval(() => {
       if (document.hidden || reducedMotion() || scene.panels.isOpen()) return;
@@ -749,6 +779,8 @@ export function init() {
       scene.pager.tick(tick);
       if (rackCanvas) { const r = rackCanvas.getContext('2d'); r.clearRect(0, 0, rackCanvas.width, rackCanvas.height); r.drawImage(rackFrames[tick % 2], 0, 0); }
       if (mug) { const m = mug.getContext('2d'); m.clearRect(0, 0, mug.width, mug.height); m.drawImage(steamFrames[tick % 2], 0, 0); }
+      if (tick % 2 === 0 && !tim.walking) paintFrame(laptopBtn, SPRITES.laptop, (tick / 2) % SPRITES.laptop.frames.length); // code scrolls, graphs move
+      if (plant && tick % 3 === 0) { const p = plant.getContext('2d'); p.clearRect(0, 0, plant.width, plant.height); p.drawImage(plantFrames[(tick / 3) % 2], 0, 0); }
       if (tim.walking) return;
       if (tim.pose === 'idle') tim.show('tim_idle_down', tick % 2);
       if (performance.now() - tim.lastAction > 12000) {
