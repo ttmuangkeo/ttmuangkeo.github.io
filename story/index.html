@@ -164,7 +164,7 @@
           <p class="features-intro">Four things I do on the job, with the proof where I have it.</p>
         </div>
         <ul class="numbers reveal" aria-label="By the numbers">
-          <li data-board="500K+ users"><strong class="number">500K+</strong> <span>users moved from EWS to Microsoft Graph, across 500+ client companies</span></li>
+          <li data-board="500K+ users"><strong class="number">500K+</strong> <span>users across 500+ client companies cut over from EWS to Microsoft Graph</span></li>
           <li data-board="~400 companies"><strong class="number">~400</strong> <span>client companies migrated onto Exchange with zero data loss</span></li>
           <li data-board="800+ → ~200 tickets"><strong class="number">800+ → ~200</strong> <span>Jira tickets after my Claude triage skill cut the queue by 75%</span></li>
           <li data-board="8 data recoveries"><strong class="number">8</strong> <span>data recoveries for high-value accounts, on a runbook I designed</span></li>
@@ -186,13 +186,13 @@
             <p class="feature-metric">800+ → ~200 tickets · Jira → Claude → GitHub</p>
             <h3>AI-powered triage &amp; review</h3>
             <p>I built a Claude skill, connected to Jira through the Atlassian MCP, that triages tickets every morning. It reads the description, separates by-design behavior from real bugs, asks reporters for missing details, and sends probes into our GitHub repo to cross-reference the code behind it, so an engineer starts with evidence instead of a blank ticket. It cut an 800+ ticket queue by 75% to about 200, each with clear repro steps, and became the team's daily priority list.</p>
-            <p>I also built Claude agent skills for PR authoring and code review that score each finding's likelihood of being a bug and mark it must-fix or minor, so the team ships smaller PRs more often. I review code alongside them. I also review PRDs and TRDs: I work deep in the product, and those docs are the instructions every feature is built from, so they have to be right before code gets written.</p>
+            <p>I also built Claude agent skills for PR authoring and code review that score each finding's likelihood of being a bug and mark it must-fix or minor, so the team ships smaller PRs more often. I reviewed code alongside them, and reviewed PRDs and TRDs: I worked deep in the product, and those docs are the instructions every feature is built from, so they have to be right before code gets written.</p>
           </article>
           <article class="feature reveal">
             <p class="feature-metric">~20 staff · 24h → 1–2h partner onboarding</p>
             <h3>Self-serve tooling &amp; automation</h3>
             <p>I built an AI diagnostic assistant on Claude, rolled out to about 20 Support and Customer Success staff, that turns vague bug reports into engineering-ready Jira tickets: repro steps, the affected account and sanitized details.</p>
-            <p>I automate the repetitive work too: my Node.js validation script cut partner onboarding from 24 hours to 1–2 hours. And I mentor support engineers on product architecture and mailbox-sync internals.</p>
+            <p>I automate the repetitive work too: my Node.js validation script cut partner onboarding from 24 hours to 1–2 hours. I also mentored support engineers on product architecture and mailbox-sync internals.</p>
           </article>
         </div>
         <div class="toolkit reveal">
@@ -241,7 +241,7 @@
             <span class="entry-date">Jun 2024 – Nov 2026</span>
           </summary>
           <ul class="entry-body">
-            <li>Promoted from Senior Application Support Engineer. Engineering liaison to the Customer Support managers: took every high-priority escalation they surfaced, about 30 a month, and fixed it end to end, from reproduction and root cause through the code fix, deploy and customer follow-up. Shipped 5–10 code fixes a month in the Rails codebase.</li>
+            <li>Promoted from Senior Application Support Engineer. Engineering liaison to the Customer Support managers: took every high-priority escalation they surfaced, about 30 a month, from reproduction and root cause to resolution and customer follow-up: 5–10 code fixes a month in the Rails codebase, and about 20 more resolved with config changes or Rails console and SQL data repairs.</li>
             <li>Led the cutover of all 500+ client companies (500K+ users) from deprecated EWS to the Microsoft Graph API, translating stored Exchange IDs into Graph IDs so synced records stayed linked. Migrated 100% of reachable mailboxes; the only exceptions were deleted users and revoked authorizations.</li>
             <li>Led a mailbox migration onto Exchange for ~400 client companies: Exchange → Exchange (Microsoft 365 → Microsoft 365, about 80%) and Google Workspace → Exchange (about 20%), rebuilding calendar, contact and group mappings with zero data loss.</li>
             <li>Designed the data-recovery runbook for high-value accounts and built its restoration pipeline: snapshot → SQL via kubectl → Rails rake task via Pulumi. Completed 8 recoveries.</li>

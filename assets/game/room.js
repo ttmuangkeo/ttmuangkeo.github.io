@@ -454,6 +454,7 @@ function buildRoom(room) {
     b.setAttribute('aria-label', o.ariaLabel);
     b.append(spriteCanvas(o.sprite));
     place(b, o.x, o.y, s.w, s.h);
+    if (o.above) b.style.zIndex = String(Number(b.style.zIndex) + o.above);
     const show = () => tipFor(o);
     b.addEventListener('pointerenter', show);
     b.addEventListener('focus', show);
@@ -612,8 +613,8 @@ function setupKeyboard(scene) {
 
 // ---------- the pager goes off once per visit and invites a triage run ----------
 const PAGE_AFTER_MS = 15_000;
-// The desktop pager bubble sits just above the pager on the desk.
-const pagerTipX = () => { const o = OBJECTS.find((obj) => obj.id === 'pager'); return o.x + SPRITES.pager.w / 2; };
+// On desktop the pager bubble hangs up and to the left of the pager, so it has the room's width to wrap in.
+const pagerRight = () => { const o = OBJECTS.find((obj) => obj.id === 'pager'); return o.x + SPRITES.pager.w; };
 function setupPager(room, scene) {
   const btn = scene.buttons.find((b) => b.dataset.object === 'pager');
   const canvas = btn.querySelector('canvas');
@@ -645,9 +646,8 @@ function setupPager(room, scene) {
       later.addEventListener('click', () => pager.stop());
       const phone = matchMedia(PHONE_QUERY).matches;
       const b = showBubble(room, scene, "Tim's pager is going off. Help him triage the ticket?",
-        phone ? { x: NATIVE_W / 2, y: 4, actions: [go, later] } : { x: pagerTipX(), y: 52, actions: [go, later] });
-      b.classList.add('bubble--pager');
-      if (phone) b.classList.add('bubble--top');
+        phone ? { x: NATIVE_W / 2, y: 4, actions: [go, later] } : { x: pagerRight(), y: 64, actions: [go, later] });
+      b.classList.add('bubble--pager', phone ? 'bubble--top' : 'bubble--left');
       return true;
     },
     tick(t) { if (buzzing) draw(t % 2); },

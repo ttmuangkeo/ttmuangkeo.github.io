@@ -90,7 +90,16 @@ test('no two objects have use spots within one step of each other', () => {
   for (const a of OBJECTS) for (const b of OBJECTS) {
     if (a === b) continue;
     const d = Math.abs(a.useSpot.col - b.useSpot.col) + Math.abs(a.useSpot.row - b.useSpot.row);
-    assert.ok(d > 1, `${a.id} and ${b.id} use spots are ${d} apart`);
+    assert.ok(d > 2, `${a.id} and ${b.id} use spots are ${d} apart`);
+  }
+});
+
+test('no floor cell is within reach of two objects', () => {
+  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked, ROOM.floorTopRow);
+  for (let c = 0; c < ROOM.cols; c++) for (let r = 0; r < ROOM.rows; r++) {
+    if (!g.walkable(c, r)) continue;
+    const near = OBJECTS.filter((o) => Math.abs(o.useSpot.col - c) + Math.abs(o.useSpot.row - r) <= 1).map((o) => o.id);
+    assert.ok(near.length <= 1, `(${c},${r}) reaches ${near.join(' and ')}`);
   }
 });
 

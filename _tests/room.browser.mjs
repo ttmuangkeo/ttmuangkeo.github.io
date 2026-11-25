@@ -67,7 +67,7 @@ await scenario('clicking a new object during a use animation opens the new panel
   await open();
   await ev(`document.querySelector('[data-object="logbook"]').click()`);
   // wait until Tim stands at the logbook spot, then click the mailbox mid-animation
-  for (let i = 0; i < 60; i++) { if ((await ev(`(() => { const t = document.querySelector('.tim').style; return t.getPropertyValue('--x') + ',' + t.getPropertyValue('--y'); })()`)) === '79,60') break; await sleep(40); } // 79,60: Tim at the binder's use spot (10,9)
+  for (let i = 0; i < 60; i++) { if ((await ev(`(() => { const t = document.querySelector('.tim').style; return t.getPropertyValue('--x') + ',' + t.getPropertyValue('--y'); })()`)) === '79,68') break; await sleep(40); } // 79,68: Tim at the binder's use spot (10,10)
   await sleep(150);
   await ev(`document.querySelector('[data-object="mailbox"]').click()`);
   for (let i = 0; i < 35; i++) {
@@ -187,9 +187,11 @@ await scenario('the pager panel runs a triage ticket to a verdict, then Get in t
 
 await scenario('the pager goes off once per visit and Triage it opens the game', async () => {
   const fast = `const st = window.setTimeout; window.setTimeout = (f, ms, ...a) => st(f, ms === 15000 ? 50 : ms, ...a);`;
-  await open({ before: `try { sessionStorage.clear(); } catch {} ${fast}` });
+  await open({ w: 1280, h: 720, before: `try { sessionStorage.clear(); } catch {} ${fast}` }); // scale 4: least room right of the pager
   const bubble = await ev(`!!document.querySelector('#room .bubble--pager') && document.querySelector('[data-object="pager"]').classList.contains('is-buzzing')`);
   if (!bubble) return 'pager did not buzz';
+  const fit = await ev(`(() => { const b = document.querySelector('#room .bubble--pager').getBoundingClientRect(); const r = document.getElementById('room').getBoundingClientRect(); return { inside: b.left >= r.left && b.right <= r.right && b.top >= r.top, w: Math.round(b.width), h: Math.round(b.height) }; })()`);
+  if (!fit.inside || fit.w < 1.5 * fit.h) return `pager bubble squeezed or outside the room: ${JSON.stringify(fit)}`;
   await ev(`document.querySelector('#room .bubble--pager .bubble-btn--ink').click()`); await sleep(300);
   const p = await panel();
   if (!(p.open && p.obj === 'incident')) return `Triage it opened ${JSON.stringify(p)}`;
@@ -243,6 +245,12 @@ await scenario('closing the rack mid-run stops it cleanly, and the Incident log 
   const errs = await ev(`window.__errs || []`);
   const p = await panel();
   return !p.open && !errs.length ? '' : `after close: ${JSON.stringify({ p, errs })}`;
+});
+
+await scenario('on phones a tap on the monitors opens the monitors, not the pager', async () => {
+  await open({ w: 375, h: 812, mobile: true });
+  const hit = await ev(`(() => { const r = document.querySelector('[data-object="laptop"]').getBoundingClientRect(); return [0.6, 0.8, 0.95].map((k) => document.elementFromPoint(r.left + r.width * k, r.top + r.height / 2)?.closest('.obj')?.dataset.object); })()`);
+  return hit.every((h) => h === 'laptop') ? '' : `taps hit ${JSON.stringify(hit)}`;
 });
 
 await scenario('the counter and tray count every object', async () => {

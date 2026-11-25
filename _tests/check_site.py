@@ -804,7 +804,10 @@ def test_resume_facts():
     if "8 recoveries" not in text and "8 data recoveries" not in text:
         problems.append("missing the 8 data recoveries")
     for phrase in ("owned bugs end to end", "owned bug tickets end-to-end", "7+ yrs",
-                   "google workspace \u2192 microsoft graph"):
+                   "google workspace \u2192 microsoft graph",
+                   "about 30 a month, and fixed it end to end",          # only 5-10 a month were code fixes
+                   "i review code alongside them", "i also review prds",  # quiet end date: past tense
+                   "and i mentor support engineers", "users moved from ews"):
         if phrase in text:
             problems.append(f"still says {phrase!r}")
     if re.search(r'class="tag">\s*Latest', raw):

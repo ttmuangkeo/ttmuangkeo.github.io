@@ -247,6 +247,7 @@ html.game-ready .stage { display: flex; justify-content: center; align-items: fl
 #room > .flash { background: #fff; opacity: 0.85; pointer-events: none; }
 #room > .bubble--hello { max-width: min(16rem, 70vw); }
 #room > .bubble--top { transform: translate(-50%, 0); max-width: min(22rem, calc(100% - 1rem)); }
+#room > .bubble--left { transform: translate(-100%, -100%); width: max-content; }
 @media (max-width: 640px) {
   #room > .bubble { font-size: 0.8rem; padding: 0.4rem 0.55rem; }
 }
