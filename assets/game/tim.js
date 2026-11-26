@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { SPRITES, paintSprite } from './sprites.js';
 import { spriteTexture } from './textures.js';
 import { buildGrid, findPath, walkSpeed, nextWalkId } from './grid.js';
-import { cellToWorld, worldToCell, facingFor, DEFAULT_YAW } from './view.js';
+import { cellToWorld, worldToCell, facingFor } from './view.js';
 import { ROOM } from './objects.js';
 import { place } from './dom.js';
 
@@ -35,7 +35,7 @@ export function createTim(world, room, { start }) {
   let emoteEl = null, emoteTimer = 0;
 
   const grid = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked);
-  const yaw = () => DEFAULT_YAW + world.swing();
+  const yaw = () => world.yaw();
 
   const tim = {
     sprite, el: tag, grid,
@@ -58,6 +58,7 @@ export function createTim(world, room, { start }) {
       tim.pos = { x, z };
       sprite.position.set(x, 0, z);
       shadow.position.set(x, 0.5, z);
+      world.follow(x, z);
       world.invalidate();
     },
     cell() { return worldToCell(tim.pos); },

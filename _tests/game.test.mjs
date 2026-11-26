@@ -409,16 +409,50 @@ test('clampSwing keeps the swing between -10 and +30 degrees', () => {
   assert.equal(V.clampSwing(-50), -10); assert.equal(V.clampSwing(45), 30); assert.equal(V.clampSwing(7), 7);
 });
 
-test('the camera stays outside the open front and on the room side of the left wall across the swing', () => {
-  for (const aspect of [16 / 9, 4 / 3]) for (let s = V.SWING_MIN; s <= V.SWING_MAX; s += 5) {
-    const { position: p } = V.cameraPose(s, aspect);
-    assert.ok(p.x > 0 && p.z > V.ROOM_D && p.y > V.WALL_H, `swing ${s}: ${JSON.stringify(p)}`);
+test('the camera stays outside the open front and on the room side of the left wall across swing, zoom and focus', () => {
+  for (const aspect of [16 / 9, 4 / 3]) for (let s = V.SWING_MIN; s <= V.SWING_MAX; s += 5) for (const zoom of [1, 1.5, 2])
+    for (const at of [{ x: 0, z: 0 }, { x: 240, z: 0 }, { x: 0, z: 112 }, { x: 240, z: 112 }]) {
+      const { position: p } = V.cameraPose(s, aspect, zoom, V.followFocus(at, aspect));
+      assert.ok(p.x > 0 && p.z > V.ROOM_D && p.y > V.WALL_H, `swing ${s} zoom ${zoom}: ${JSON.stringify(p)}`);
+    }
+});
+
+test('the eye-level camera looks low and close; the overview looks down from farther away', () => {
+  const near = V.cameraPose(0, 16 / 9, 1), far = V.cameraPose(0, 16 / 9, 2);
+  const pitch = (pose) => Math.atan2(pose.position.y - pose.target.y, Math.hypot(pose.position.x - pose.target.x, pose.position.z - pose.target.z)) * 180 / Math.PI;
+  const dist = (pose) => Math.hypot(pose.position.x - pose.target.x, pose.position.y - pose.target.y, pose.position.z - pose.target.z);
+  assert.ok(Math.abs(pitch(near) - V.FOLLOW_PITCH) < 1e-6 && pitch(near) <= 30, `eye-level pitch ${pitch(near)}`);
+  assert.ok(Math.abs(pitch(far) - V.PITCH) < 1e-6);
+  assert.ok(dist(near) < dist(far) / 2, `${dist(near)} vs ${dist(far)}`);
+});
+
+test('the follow focus tracks Tim and never lets the frame run past the side walls', () => {
+  for (const aspect of [16 / 9, 4 / 3]) {
+    const mid = V.followFocus({ x: 120, z: 60 }, aspect);
+    assert.equal(mid.x, 120);
+    assert.equal(mid.z, 60 - V.FOLLOW_LEAD);
+    for (let x = 0; x <= 240; x += 20) for (let z = 0; z <= 112; z += 16) {
+      const f = V.followFocus({ x, z }, aspect);
+      const pose = V.cameraPose(0, aspect, 1, f);
+      for (const y of [0, 36, 72]) {
+        const l = V.projectNdc(pose, aspect, { x: 0, y, z: V.ROOM_D }), r = V.projectNdc(pose, aspect, { x: 240, y, z: V.ROOM_D });
+        assert.ok(l.x <= -1 + 1e-6 || Math.abs(l.y) > 1, `${aspect} tim ${x},${z}: left wall edge at ${JSON.stringify(l)}`);
+        assert.ok(r.x >= 1 - 1e-6 || Math.abs(r.y) > 1, `${aspect} tim ${x},${z}: right wall edge at ${JSON.stringify(r)}`);
+      }
+    }
   }
 });
 
-test('the default camera frames the whole room at desktop and phone aspects', () => {
+test('the camera yaw blends from eye level to the overview and adds the swing', () => {
+  assert.equal(V.cameraYaw(0, 1), V.FOLLOW_YAW);
+  assert.equal(V.cameraYaw(0, 2), V.DEFAULT_YAW);
+  assert.equal(V.cameraYaw(10, 1), V.FOLLOW_YAW + 10);
+  assert.ok(V.cameraYaw(0, 1.5) > V.FOLLOW_YAW && V.cameraYaw(0, 1.5) < V.DEFAULT_YAW);
+});
+
+test('the overview frames the whole room at desktop and phone aspects', () => {
   for (const aspect of [16 / 9, 4 / 3]) {
-    const pose = V.cameraPose(0, aspect);
+    const pose = V.cameraPose(0, aspect, V.ZOOM_MAX);
     for (const x of [0, 240]) for (const y of [0, 72]) for (const z of [0, 112]) {
       const n = V.projectNdc(pose, aspect, { x, y, z });
       assert.ok(Math.abs(n.x) <= 1 && Math.abs(n.y) <= 1, `${aspect} corner ${x},${y},${z} -> ${JSON.stringify(n)}`);
@@ -504,13 +538,7 @@ test('the 2D room backdrop and native-size scaling are gone', async () => {
   assert.equal(grid.NATIVE_W, undefined);
 });
 
-test('the whole room stays in frame across the zoom range', () => {
-  for (const zoom of [1, 1.08, 1.15]) {
-    const pose = V.cameraPose(0, 16 / 9, zoom);
-    for (const x of [0, 240]) for (const y of [0, 72]) for (const z of [0, 112]) {
-      const n = V.projectNdc(pose, 16 / 9, { x, y, z });
-      assert.ok(Math.abs(n.x) <= 1 && Math.abs(n.y) <= 1, `zoom ${zoom}`);
-    }
-  }
-  assert.deepEqual([V.clampZoom(0.5), V.clampZoom(2), V.clampZoom(1.1)], [1, 1.15, 1.1]);
+test('zoom runs from eye level (1) to the overview (2)', () => {
+  assert.deepEqual([V.clampZoom(0.5), V.clampZoom(3), V.clampZoom(1.1)], [1, 2, 1.1]);
+  assert.deepEqual([V.zoomBlend(1), V.zoomBlend(2), V.zoomBlend(1.5)], [0, 1, 0.5]);
 });
