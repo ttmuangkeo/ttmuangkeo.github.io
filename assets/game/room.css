@@ -369,3 +369,48 @@ html.is-phone .board-overlay { display: none; }
   .mig-sees li { padding: 0.4rem 0.65rem; font-size: 0.85rem; }
 }
 @media (prefers-reduced-motion: reduce) { .mig-sees li.is-new { animation: none; } }
+
+/* ---------- phone controls: a handheld D-pad and A/B under the room (JS only) ---------- */
+.pad { display: none; }
+html.game-ready.is-phone .pad {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.5rem;
+  padding: 1rem 1.25rem 1.1rem; background: #ddd5c3; border-bottom: 3px solid var(--ink);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.45);
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.pad-dpad { --arm: 2.75rem; position: relative; width: calc(var(--arm) * 3); height: calc(var(--arm) * 3); cursor: pointer; }
+.pad-arm, .pad-hub { position: absolute; width: var(--arm); height: var(--arm); background: var(--ink); }
+.pad-arm--up { left: var(--arm); top: 0; border-radius: 6px 6px 0 0; }
+.pad-arm--down { left: var(--arm); bottom: 0; border-radius: 0 0 6px 6px; }
+.pad-arm--left { left: 0; top: var(--arm); border-radius: 6px 0 0 6px; }
+.pad-arm--right { right: 0; top: var(--arm); border-radius: 0 6px 6px 0; }
+.pad-hub { left: var(--arm); top: var(--arm); }
+.pad-hub::after { content: ""; position: absolute; inset: 30%; border-radius: 50%; background: rgba(255, 255, 255, 0.12); }
+.pad-arm::after { /* a little arrow on each arm */
+  content: ""; position: absolute; left: 50%; top: 50%; width: 0; height: 0;
+  border: 6px solid transparent; transform: translate(-50%, -50%);
+}
+.pad-arm--up::after { border-bottom-color: rgba(255, 255, 255, 0.35); margin-top: -3px; }
+.pad-arm--down::after { border-top-color: rgba(255, 255, 255, 0.35); margin-top: 3px; }
+.pad-arm--left::after { border-right-color: rgba(255, 255, 255, 0.35); margin-left: -3px; }
+.pad-arm--right::after { border-left-color: rgba(255, 255, 255, 0.35); margin-left: 3px; }
+.pad-dpad { filter: drop-shadow(0 4px 0 rgba(31, 42, 34, 0.35)); }
+.pad-dpad[data-dir="up"] .pad-arm--up, .pad-dpad[data-dir="down"] .pad-arm--down,
+.pad-dpad[data-dir="left"] .pad-arm--left, .pad-dpad[data-dir="right"] .pad-arm--right { background: var(--rust-text); }
+.pad-hint {
+  margin: 0; align-self: end; text-align: center;
+  font: 600 0.6rem/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+}
+.pad-hint b { color: var(--rust-text); }
+.pad-ab { position: relative; width: 7.5rem; height: 6.5rem; transform: rotate(-22deg); }
+.pad-btn {
+  position: absolute; width: 3.4rem; height: 3.4rem; padding: 0; border: 3px solid var(--ink); border-radius: 50%;
+  background: var(--rust); color: var(--paper); font: 700 1.15rem/1 var(--font-mono); cursor: pointer;
+  box-shadow: 0 4px 0 var(--ink); -webkit-tap-highlight-color: transparent; touch-action: none;
+}
+.pad-btn--b { left: 0; bottom: 0.4rem; }
+.pad-btn--a { right: 0; top: 0.4rem; }
+.pad-btn.is-down { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); background: var(--rust-text); }
+.pad-btn:focus { outline: none; }
+@media (max-width: 340px) { .pad-dpad { --arm: 2.4rem; } .pad-ab { width: 6.6rem; } .pad-btn { width: 3rem; height: 3rem; } }

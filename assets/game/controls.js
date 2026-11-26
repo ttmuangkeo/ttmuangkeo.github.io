@@ -10,6 +10,17 @@ export const KEY_DIRS = {
 
 const STEP = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 
+// The on-screen D-pad (phones): a thumb at (dx, dy) px from the pad's centre points one way,
+// whichever axis it leans on more; inside the dead zone it points nowhere.
+export function padDir(dx, dy, dead = 6) {
+  if (Math.hypot(dx, dy) < dead) return null;
+  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 'right' : 'left';
+  return dy > 0 ? 'down' : 'up';
+}
+
+// The key each pad direction stands for, so the D-pad and A/B can enter the Konami code too.
+export const PAD_KEYS = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
+
 export function nextCell({ col, row }, dir) {
   const [dc, dr] = STEP[dir];
   return { col: col + dc, row: row + dr };

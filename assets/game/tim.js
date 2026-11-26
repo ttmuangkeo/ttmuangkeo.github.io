@@ -148,11 +148,14 @@ export function createTim(world, room, { start }) {
       return true;
     },
   };
-  // A friendly wave (a still wave pose under reduced motion).
+  // A friendly wave (a still wave pose under reduced motion). A newer wave takes over from an older one.
+  let waveId = 0;
   tim.wave = async () => {
-    if (reducedMotion()) { tim.show('tim_wave', 0); await sleep(1200); tim.show('tim_idle_down'); return; }
-    for (let i = 0; i < 6; i++) { if (tim.walking) return; tim.show('tim_wave', i); await sleep(200); }
-    if (!tim.walking) tim.show('tim_idle_down');
+    const id = ++waveId;
+    const mine = () => id === waveId && !tim.walking;
+    if (reducedMotion()) { tim.show('tim_wave', 0); await sleep(1200); if (mine()) tim.show('tim_idle_down'); return; }
+    for (let i = 0; i < 6; i++) { if (!mine()) return; tim.show('tim_wave', i); await sleep(200); }
+    if (mine()) tim.show('tim_idle_down');
   };
 
   function reproject() {
