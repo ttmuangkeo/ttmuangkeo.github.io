@@ -129,6 +129,8 @@ def iter_text_files():
         rel = p.relative_to(ROOT)
         if rel.parts[0] in SKIP_DIRS or not p.is_file():
             continue
+        if rel.parts[:2] == ("assets", "vendor"):  # third-party minified code, not site copy
+            continue
         if p.suffix.lower() in BINARY_EXT:
             continue
         try:
@@ -751,7 +753,8 @@ def test_tray_markup():
 
 
 GAME_FILES = ["room.js", "sprites.js", "objects.js", "grid.js", "state.js", "panels.js", "room.css",
-              "controls.js", "sky.js", "incident.js", "migration.js", "dom.js"]
+              "controls.js", "sky.js", "incident.js", "migration.js", "dom.js",
+              "view.js", "textures.js", "props.js", "world.js", "tim.js"]
 
 
 def test_game_budget():
@@ -768,11 +771,12 @@ def test_game_budget():
 
 def test_game_life():
     js = (ROOT / "assets" / "game" / "room.js").read_text(encoding="utf-8")
+    tim_js = (ROOT / "assets" / "game" / "tim.js").read_text(encoding="utf-8")
     css = (ROOT / "assets" / "game" / "room.css").read_text(encoding="utf-8")
     problems = []
     if "Hey, I\u2019m Tim" not in js and "Hey, I'm Tim" not in js:
         problems.append("no welcome bubble copy")
-    if "'tim_wave'" not in js or "wave" not in js.split("export function init(")[-1]:
+    if "'tim_wave'" not in js + tim_js or "wave" not in js.split("export function init(")[-1]:
         problems.append("Tim does not wave on load")
     if "document.hidden" not in js:
         problems.append("idle timers do not pause when the tab is hidden")
@@ -839,6 +843,33 @@ def test_new_blocks():
     if has(feats, "integrations-wrap"):
         problems.append(".integrations-wrap should be gone")
     check("new_blocks", not problems, "; ".join(problems))
+
+
+VENDOR_THREE = ROOT / "assets" / "vendor" / "three"
+
+
+def test_vendor_three():
+    """Three.js r170 is vendored and the homepage loads it through an import map."""
+    problems = []
+    lib = VENDOR_THREE / "three.module.min.js"
+    src = lib.read_text(encoding="utf-8") if lib.exists() else ""
+    rev = re.search(r'const (\w+)="(\d+)"', src)  # minified: const t="170" ... t as REVISION
+    if not (rev and rev.group(2) == "170" and re.search(rf'\b{rev.group(1)} as REVISION\b', src)):
+        problems.append("assets/vendor/three/three.module.min.js missing or not r170")
+    if not (VENDOR_THREE / "LICENSE").exists():
+        problems.append("assets/vendor/three/LICENSE missing")
+    html = load_index()
+    m = re.search(r'<script type="importmap">(.*?)</script>', html, re.S)
+    try:
+        import json
+        target = json.loads(m.group(1))["imports"]["three"] if m else None
+    except (ValueError, KeyError):
+        target = None
+    if target != "./assets/vendor/three/three.module.min.js":
+        problems.append(f"import map maps three to {target!r}")
+    elif html.find("<script type=\"importmap\">") > html.find("assets/game/room.js"):
+        problems.append("import map must come before room.js")
+    check("vendor_three", not problems, "; ".join(problems))
 
 
 def main():

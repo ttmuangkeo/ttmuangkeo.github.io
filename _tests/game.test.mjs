@@ -1,8 +1,7 @@
 // Unit tests for the pixel-room game logic. Run: node --test _tests/
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PALETTE, SPRITES, WINDOW, validateSprite } from '../assets/game/sprites.js';
-import { NATIVE_W, NATIVE_H } from '../assets/game/grid.js';
+import { PALETTE, SPRITES, WINDOW, EMOTES, validateSprite } from '../assets/game/sprites.js';
 
 const OBJECT_IDS = ['pennant', 'map', 'whiteboard', 'laptop', 'pager', 'logbook', 'toolbox', 'plaque', 'keys', 'camera', 'rack', 'mailbox'];
 const GAME_PANELS = ['rack']; // objects whose panel is a mini-game, not story content
@@ -24,24 +23,18 @@ test('validateSprite catches bad rows and unknown palette keys', () => {
 });
 
 test('required sprites exist', () => {
-  const required = ['room', ...OBJECT_IDS, 'desk', 'shelf', 'rug', 'mug', 'sofa', 'plant', 'pendant', ...TIM_SHEETS,
+  const required = ['wall_back', 'wall_left', 'floor', ...OBJECT_IDS, 'desk', 'shelf', 'rug', 'mug', 'sofa', 'plant', 'pendant', ...TIM_SHEETS,
     ...OBJECT_IDS.map((id) => `icon_${id}`)];
   for (const key of required) assert.ok(SPRITES[key], `missing sprite ${key}`);
 });
 
-test('room is 240x135 and matches the native size', () => {
-  assert.equal(SPRITES.room.w, 240);
-  assert.equal(SPRITES.room.h, 135);
-  assert.equal(NATIVE_W, 240);
-  assert.equal(NATIVE_H, 135);
-});
-
 test('the window fits inside the room', () => {
-  assert.ok(WINDOW.x >= 0 && WINDOW.y >= 0 && WINDOW.x + WINDOW.w <= NATIVE_W && WINDOW.y + WINDOW.h <= 72, JSON.stringify(WINDOW));
+  assert.ok(WINDOW.x >= 0 && WINDOW.y >= 0 && WINDOW.x + WINDOW.w <= 240 && WINDOW.y + WINDOW.h <= 72, JSON.stringify(WINDOW));
 });
 
 test('tim frames share one size and have the right counts', () => {
   const { w, h } = SPRITES.tim_idle_down;
+  assert.deepEqual([w, h], [24, 36], 'chibi Tim is 24x36');
   for (const key of TIM_SHEETS) {
     assert.equal(SPRITES[key].w, w, key);
     assert.equal(SPRITES[key].h, h, key);
@@ -65,20 +58,44 @@ test('palette keys are single characters with "." transparent', () => {
 });
 
 // ---------- Task 3: objects and scaling ----------
-import { OBJECTS, ROOM } from '../assets/game/objects.js';
-import { fitScale } from '../assets/game/grid.js';
+import { OBJECTS, DECOR, ROOM, WINDOW_SPOT } from '../assets/game/objects.js';
 
 test('OBJECTS has the 12 ids in order', () => {
   assert.deepEqual(OBJECTS.map((o) => o.id), OBJECT_IDS);
 });
 
-test("every object's sprite exists and lies inside the room", () => {
-  for (const o of OBJECTS) {
-    const s = SPRITES[o.sprite];
-    assert.ok(s, `${o.id}: sprite ${o.sprite}`);
-    assert.ok(o.x >= 0 && o.y >= 0 && o.x + s.w <= NATIVE_W && o.y + s.h <= NATIVE_H, `${o.id} out of bounds`);
-    assert.ok(o.label && o.ariaLabel, `${o.id} needs label and ariaLabel`);
+test('every object and decor piece lies inside the room', () => {
+  for (const o of [...OBJECTS, ...DECOR]) {
+    const s = SPRITES[o.sprite], a = o.at;
+    assert.ok(s && a, `${o.id ?? o.sprite}: sprite and placement`);
+    if (o.id) assert.ok(o.label && o.ariaLabel, `${o.id} needs label and ariaLabel`);
+    assert.ok(['back', 'left', 'floor', 'desk', 'hang'].includes(a.on), `${o.id ?? o.sprite} mount ${a.on}`);
+    if (a.on === 'back') assert.ok(a.x >= 0 && a.x + s.w <= 240 && a.y >= 0 && a.y + s.h <= 72, o.id ?? o.sprite);
+    if (a.on === 'left') assert.ok(a.z >= 0 && a.z + s.w <= 112 && a.y >= 0 && a.y + s.h <= 72, o.id ?? o.sprite);
+    if (a.on === 'hang') assert.ok(a.x >= 0 && a.x + s.w <= 240 && a.z >= 0 && a.z <= 112, o.sprite);
+    if (a.on === 'floor' || a.on === 'desk') assert.ok(a.x >= 0 && a.x + s.w <= 240 && a.z >= 0 && a.z + a.d <= 112, o.id ?? o.sprite);
   }
+});
+
+test('back-wall pieces and the window never overlap', () => {
+  const rects = [...OBJECTS, ...DECOR].filter((o) => o.at.on === 'back')
+    .map((o) => ({ n: o.id ?? o.sprite, x: o.at.x, y: o.at.y, w: SPRITES[o.sprite].w, h: SPRITES[o.sprite].h }))
+    .concat([{ n: 'window', ...WINDOW }]);
+  for (const a of rects) for (const b of rects) if (a !== b && a.n !== 'shelf' && b.n !== 'shelf')
+    assert.ok(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y, `${a.n} overlaps ${b.n}`);
+});
+
+test('walking straight up from the start reaches the trail map', () => {
+  const map = OBJECTS.find((o) => o.id === 'map');
+  assert.deepEqual(map.useSpot, { col: ROOM.start.col, row: 0 });
+  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked);
+  for (let r = 0; r <= ROOM.start.row; r++) assert.ok(g.walkable(ROOM.start.col, r), `row ${r}`);
+});
+
+test('the window spot is walkable and under the window', () => {
+  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked);
+  assert.ok(g.walkable(WINDOW_SPOT.col, WINDOW_SPOT.row));
+  const x = WINDOW_SPOT.col * 8 + 4; assert.ok(x >= WINDOW.x && x <= WINDOW.x + WINDOW.w);
 });
 
 test('the monitors cycle at least three screens and the plant sways', () => {
@@ -95,7 +112,7 @@ test('no two objects have use spots within one step of each other', () => {
 });
 
 test('no floor cell is within reach of two objects', () => {
-  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked, ROOM.floorTopRow);
+  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked);
   for (let c = 0; c < ROOM.cols; c++) for (let r = 0; r < ROOM.rows; r++) {
     if (!g.walkable(c, r)) continue;
     const near = OBJECTS.filter((o) => Math.abs(o.useSpot.col - c) + Math.abs(o.useSpot.row - r) <= 1).map((o) => o.id);
@@ -103,29 +120,14 @@ test('no floor cell is within reach of two objects', () => {
   }
 });
 
-test('the room grid is 30x16 with the floor from row 9', () => {
-  assert.deepEqual([ROOM.cols, ROOM.rows, ROOM.cell, ROOM.floorTopRow], [30, 16, 8, 9]);
+test('the room grid is 30x14 and every row is floor', () => {
+  assert.deepEqual([ROOM.cols, ROOM.rows, ROOM.cell], [30, 14, 8]);
+  assert.equal(ROOM.floorTopRow, undefined);
 });
 
 test('useSpots are walkable floor cells', () => {
-  const blocked = new Set(ROOM.blocked.map(([c, r]) => `${c},${r}`));
-  for (const o of OBJECTS) {
-    const { col, row } = o.useSpot;
-    assert.ok(col >= 0 && col < ROOM.cols, `${o.id} col`);
-    assert.ok(row >= ROOM.floorTopRow && row < ROOM.rows, `${o.id} row ${row} not on floor`);
-    assert.ok(!blocked.has(`${col},${row}`), `${o.id} useSpot is blocked`);
-  }
-});
-
-test('fitScale on desktop is the largest whole number that fits', () => {
-  assert.equal(fitScale(1280, 800, 48, false), 5);
-  assert.equal(fitScale(1280, 720, 64, false), 4);
-  assert.equal(fitScale(300, 200, 48, false), 1);
-  assert.ok(Number.isInteger(fitScale(1920, 1080, 52, false)));
-});
-
-test('fitScale on phones fits the width', () => {
-  assert.equal(fitScale(375, 812, 48, true), 375 / 240);
+  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked);
+  for (const o of OBJECTS) assert.ok(g.walkable(o.useSpot.col, o.useSpot.row), `${o.id} useSpot ${JSON.stringify(o.useSpot)}`);
 });
 
 // ---------- Task 4: walk grid and pathfinding ----------
@@ -156,17 +158,11 @@ test('findPath returns [] for the same cell', () => {
 });
 
 test('every object useSpot is reachable from where Tim starts', () => {
-  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked, ROOM.floorTopRow);
+  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked);
   for (const o of OBJECTS) {
-    const path = findPath(g, ROOM.start, o.useSpot);
+    const path = findPath(g, ROOM.start, o.useSpot, { diagonal: true });
     assert.ok(path.length > 0, `${o.id} unreachable`);
   }
-});
-
-test('the walk grid treats the wall rows as blocked', () => {
-  const g = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked, ROOM.floorTopRow);
-  assert.equal(g.walkable(5, ROOM.floorTopRow - 1), false);
-  assert.equal(g.walkable(ROOM.start.col, ROOM.start.row), true);
 });
 
 test('retarget: a newer walk id supersedes the old one', () => {
@@ -372,13 +368,149 @@ test('the cutover runs in six stages in the runbook order', () => {
   assert.ok(panel.title && panel.story.startsWith('#'));
 });
 
-test('the rack stands on the floor clear of the mailbox, used from its left', () => {
+test('the rack stands on the floor in the front-right corner, used from its left', () => {
   const rack = OBJECTS.find((o) => o.id === 'rack');
   assert.equal(rack.face, 'right');
+  assert.equal(rack.at.on, 'floor');
   const blocked = new Set(ROOM.blocked.map(([c, r]) => `${c},${r}`));
-  const s = SPRITES.rack;
-  const footCols = [Math.floor(rack.x / 8), Math.floor((rack.x + s.w - 1) / 8)];
-  for (const c of footCols) assert.ok(blocked.has(`${c},${Math.floor((rack.y + s.h - 1) / 8)}`), `rack foot col ${c} blocked`);
-  assert.equal(rack.useSpot.col, footCols[0] - 1);
+  const c0 = Math.floor(rack.at.x / 8), c1 = Math.floor((rack.at.x + SPRITES.rack.w - 1) / 8);
+  const r0 = Math.floor(rack.at.z / 8), r1 = Math.floor((rack.at.z + rack.at.d - 1) / 8);
+  for (let c = c0; c <= c1; c++) for (let r = r0; r <= r1; r++) assert.ok(blocked.has(`${c},${r}`), `rack cell ${c},${r} blocked`);
+  assert.ok(rack.at.x + SPRITES.rack.w > 200 && rack.at.z + rack.at.d > 80, 'front-right corner');
+  assert.equal(rack.useSpot.col, c0 - 1);
   assert.equal(SPRITES.rack.frames.length, 2, 'rack lights blink');
+});
+
+// ---------- 3D view ----------
+import * as V from '../assets/game/view.js';
+
+test('cell and world coordinates round-trip at cell centres', () => {
+  assert.deepEqual(V.cellToWorld({ col: 0, row: 0 }), { x: 4, z: 4 });
+  assert.deepEqual(V.cellToWorld({ col: 29, row: 13 }), { x: 236, z: 108 });
+  assert.deepEqual(V.worldToCell({ x: 236.9, z: 108 }), { col: 29, row: 13 });
+});
+
+test('frameFor: desktop is ~16:9 at an integer scale, never wider than the viewport', () => {
+  assert.deepEqual(V.frameFor(1280, 768, 48, false), { renderW: 416, renderH: 234, scale: 3 });
+  assert.deepEqual(V.frameFor(1280, 688, 64, false), { renderW: 554, renderH: 311, scale: 2 });
+  for (const [vw, vh, hud] of [[1440, 868, 52], [1920, 1048, 52], [700, 568, 90]]) {
+    const f = V.frameFor(vw, vh, hud, false);
+    assert.ok(Number.isInteger(f.scale) && f.scale >= 1);
+    assert.ok(f.renderW * f.scale <= vw - 32 && f.renderH * f.scale <= vh - hud);
+    assert.ok(f.renderW >= 300 && f.renderW <= 700, `renderW ${f.renderW}`);
+  }
+});
+
+test('frameFor: phones render 240x180 and fill the width', () => {
+  assert.deepEqual(V.frameFor(375, 780, 48, true), { renderW: 240, renderH: 180, scale: 375 / 240 });
+});
+
+test('clampSwing keeps the swing between -10 and +30 degrees', () => {
+  assert.equal(V.clampSwing(-50), -10); assert.equal(V.clampSwing(45), 30); assert.equal(V.clampSwing(7), 7);
+});
+
+test('the camera stays outside the open front and on the room side of the left wall across the swing', () => {
+  for (const aspect of [16 / 9, 4 / 3]) for (let s = V.SWING_MIN; s <= V.SWING_MAX; s += 5) {
+    const { position: p } = V.cameraPose(s, aspect);
+    assert.ok(p.x > 0 && p.z > V.ROOM_D && p.y > V.WALL_H, `swing ${s}: ${JSON.stringify(p)}`);
+  }
+});
+
+test('the default camera frames the whole room at desktop and phone aspects', () => {
+  for (const aspect of [16 / 9, 4 / 3]) {
+    const pose = V.cameraPose(0, aspect);
+    for (const x of [0, 240]) for (const y of [0, 72]) for (const z of [0, 112]) {
+      const n = V.projectNdc(pose, aspect, { x, y, z });
+      assert.ok(Math.abs(n.x) <= 1 && Math.abs(n.y) <= 1, `${aspect} corner ${x},${y},${z} -> ${JSON.stringify(n)}`);
+    }
+  }
+});
+
+test('facingFor is camera-relative', () => {
+  assert.equal(V.facingFor(0, 1, 0), 'down'); assert.equal(V.facingFor(0, -1, 0), 'up');
+  assert.equal(V.facingFor(1, 0, 0), 'right'); assert.equal(V.facingFor(-1, 0, 0), 'left');
+  assert.equal(V.facingFor(1, 0, 90), 'down'); // camera on the +x side: walking +x comes toward it
+});
+
+test('quadMatrix maps the rectangle corners onto the quad', () => {
+  const quad = [[10, 5], [110, 12], [104, 80], [8, 70]];
+  const m = V.quadMatrix(52, 34, quad);
+  const apply = (x, y) => { const w = m[3] * x + m[7] * y + m[15]; return [(m[0] * x + m[4] * y + m[12]) / w, (m[1] * x + m[5] * y + m[13]) / w]; };
+  [[0, 0], [52, 0], [52, 34], [0, 34]].forEach(([x, y], i) => {
+    const [px, py] = apply(x, y);
+    assert.ok(Math.abs(px - quad[i][0]) < 0.01 && Math.abs(py - quad[i][1]) < 0.01, `corner ${i}`);
+  });
+  assert.match(V.quadTransform(52, 34, quad), /^matrix3d\(([-\d.e]+,\s*){15}[-\d.e]+\)$/);
+});
+
+// ---------- diagonal paths ----------
+test('diagonal findPath takes the diagonal across open floor', () => {
+  const g = buildGrid(5, 5, []);
+  assert.deepEqual(findPath(g, { col: 0, row: 0 }, { col: 3, row: 3 }, { diagonal: true }),
+    [{ col: 1, row: 1 }, { col: 2, row: 2 }, { col: 3, row: 3 }]);
+});
+test('diagonal findPath never cuts a blocked corner', () => {
+  const g = buildGrid(3, 3, [[1, 0]]);
+  const path = findPath(g, { col: 0, row: 0 }, { col: 1, row: 1 }, { diagonal: true });
+  assert.deepEqual(path, [{ col: 0, row: 1 }, { col: 1, row: 1 }]);
+});
+test('diagonal findPath prefers straight runs over zigzags of equal cost', () => {
+  const g = buildGrid(6, 3, []);
+  const path = findPath(g, { col: 0, row: 1 }, { col: 5, row: 1 }, { diagonal: true });
+  assert.ok(path.every((p) => p.row === 1), JSON.stringify(path));
+});
+
+// ---------- lighting ----------
+import { lightFor } from '../assets/game/sky.js';
+test('lightFor follows the Seattle sky', () => {
+  const day = lightFor({ phase: 'day' }), dawn = lightFor({ phase: 'dawn' }), night = lightFor({ phase: 'night' });
+  assert.ok(day.sun.intensity > dawn.sun.intensity && dawn.sun.intensity > night.sun.intensity);
+  assert.ok(night.lamps > day.lamps);
+  assert.ok(lightFor({ phase: 'day', rain: true }).sun.intensity < day.sun.intensity);
+  const warm = (c) => ((c >> 16) & 255) - (c & 255);
+  assert.ok(warm(dawn.sun.color) > warm(day.sun.color), 'dawn light is warmer');
+  assert.equal(day.tint, null);
+  const a = lightFor({ phase: 'night', aurora: true }).tint;
+  assert.ok(a !== null && ((a >> 8) & 255) > ((a >> 16) & 255), 'aurora tint is green-led');
+});
+
+// ---------- chibi Tim and emotes ----------
+test('every emote is an 11x11 sprite', () => {
+  assert.deepEqual(EMOTES, ['alert', 'heart', 'dots', 'note', 'zzz']);
+  for (const k of EMOTES) {
+    const s = SPRITES[`emote_${k}`];
+    assert.ok(s, k); assert.equal(s.w, 11, k); assert.equal(s.h, 11, k);
+    assert.deepEqual(validateSprite(s), [], k);
+  }
+});
+test('chibi Tim has a big head with hair and eyes', () => {
+  for (const key of TIM_SHEETS) for (const f of SPRITES[key].frames)
+    assert.ok(f.slice(0, 14).some((row) => row.includes('H')), `${key} has no hair in the top 40%`);
+  const eyes = SPRITES.tim_idle_down.frames[0].slice(8, 14).join('').split('').filter((c) => c === 'K').length;
+  assert.ok(eyes >= 2, `eyes: ${eyes}`);
+});
+
+// ---------- room shell textures ----------
+test('the room shell has wall and floor textures at world size', () => {
+  assert.deepEqual([SPRITES.wall_back.w, SPRITES.wall_back.h], [240, 72]);
+  assert.deepEqual([SPRITES.wall_left.w, SPRITES.wall_left.h], [112, 72]);
+  assert.deepEqual([SPRITES.floor.w, SPRITES.floor.h], [240, 112]);
+});
+
+test('the 2D room backdrop and native-size scaling are gone', async () => {
+  assert.equal(SPRITES.room, undefined);
+  const grid = await import('../assets/game/grid.js');
+  assert.equal(grid.fitScale, undefined);
+  assert.equal(grid.NATIVE_W, undefined);
+});
+
+test('the whole room stays in frame across the zoom range', () => {
+  for (const zoom of [1, 1.08, 1.15]) {
+    const pose = V.cameraPose(0, 16 / 9, zoom);
+    for (const x of [0, 240]) for (const y of [0, 72]) for (const z of [0, 112]) {
+      const n = V.projectNdc(pose, 16 / 9, { x, y, z });
+      assert.ok(Math.abs(n.x) <= 1 && Math.abs(n.y) <= 1, `zoom ${zoom}`);
+    }
+  }
+  assert.deepEqual([V.clampZoom(0.5), V.clampZoom(2), V.clampZoom(1.1)], [1, 1.15, 1.1]);
 });

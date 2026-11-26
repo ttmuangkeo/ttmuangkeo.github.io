@@ -16,7 +16,7 @@ const BASE = `http://127.0.0.1:${httpPort}/`;
 
 const server = spawn('python3', ['-m', 'http.server', String(httpPort), '--bind', '127.0.0.1'], { cwd: ROOT, stdio: 'ignore' });
 const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'room-test-'));
-const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${cdpPort}`, `--user-data-dir=${prof}`, '--hide-scrollbars', 'about:blank'], { stdio: 'ignore' });
+const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${cdpPort}`, `--user-data-dir=${prof}`, '--hide-scrollbars', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', 'about:blank'], { stdio: 'ignore' });
 const cleanup = () => { try { chrome.kill(); server.kill(); fs.rmSync(prof, { recursive: true, force: true, maxRetries: 5 }); } catch { /* ignore */ } };
 
 let tabs;
@@ -34,12 +34,19 @@ const key = async (k, kc, mods = 0) => {
 };
 await send('Runtime.enable'); await send('Page.enable');
 let injected = null;
-async function open({ w = 1280, h = 800, mobile = false, before = '' } = {}) {
+async function open({ w = 1280, h = 800, mobile = false, before = '', path = '', dpr = 1 } = {}) {
   if (injected) await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: injected });
   injected = (await send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__errs = []; addEventListener('error', (e) => window.__errs.push(String(e.message))); addEventListener('unhandledrejection', (e) => window.__errs.push(String(e.reason))); try { localStorage.clear(); } catch {} ${before}` })).identifier;
-  await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
+  await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: dpr, mobile });
   await send('Page.navigate', { url: 'about:blank' }); await sleep(150);
-  await send('Page.navigate', { url: BASE }); await sleep(1500);
+  await send('Page.navigate', { url: BASE + path });
+  // wait for the room (or the world test page, or the fallback) to finish starting, then let it settle
+  for (let i = 0; i < 80; i++) {
+    await sleep(100);
+    const up = await ev(`document.readyState === 'complete' && (document.documentElement.classList.contains('game-ready') || !!window.__world || !!window.__worldError || !document.getElementById('room') || (performance.now() > 6000))`);
+    if (up) break;
+  }
+  await sleep(700);
 }
 const panel = () => ev(`({ open: document.getElementById('panel').open, obj: document.getElementById('panel').dataset.object })`);
 
@@ -67,7 +74,7 @@ await scenario('clicking a new object during a use animation opens the new panel
   await open();
   await ev(`document.querySelector('[data-object="logbook"]').click()`);
   // wait until Tim stands at the logbook spot, then click the mailbox mid-animation
-  for (let i = 0; i < 60; i++) { if ((await ev(`(() => { const t = document.querySelector('.tim').style; return t.getPropertyValue('--x') + ',' + t.getPropertyValue('--y'); })()`)) === '79,68') break; await sleep(40); } // 79,68: Tim at the binder's use spot (10,10)
+  for (let i = 0; i < 60; i++) { if ((await ev(`(() => { const t = document.getElementById('room').scene.tim; const c = t.cell(); return !t.walking && c.col === 10 && c.row === 1; })()`))) break; await sleep(40); } // Tim at the binder's use spot (10,1)
   await sleep(150);
   await ev(`document.querySelector('[data-object="mailbox"]').click()`);
   for (let i = 0; i < 35; i++) {
@@ -302,6 +309,283 @@ await scenario('every one of the twelve objects opens a panel with content', asy
   }
   const errs = await ev(`window.__errs || []`);
   return bad.length || errs.length ? JSON.stringify({ bad, errs }) : '';
+});
+
+const WORLD = '_tests/world.html';
+// Distinct colours in a canvas, read through a 2D copy.
+const colours = (sel) => `(() => { const src = ${sel}; const c = document.createElement('canvas'); c.width = src.width; c.height = src.height; const x = c.getContext('2d'); x.drawImage(src, 0, 0); const d = x.getImageData(0, 0, c.width, c.height).data; const s = new Set(); for (let i = 0; i < d.length; i += 4) s.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]); return s.size; })()`;
+// Client point of a render-pixel point in the world canvas.
+const CLIENT = `const client = (w, p) => { const r = w.canvas.getBoundingClientRect(); const k = r.width / w.frame.renderW; return [r.left + p.x * k, r.top + p.y * k]; };`;
+
+// ---------- the homepage in 3D ----------
+const SCENE = `document.getElementById('room').scene`;
+const clickAt = async (x, y, button = 'left') => {
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button, clickCount: 1 });
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button, clickCount: 1 });
+};
+
+await scenario('the homepage renders a non-blank 3D frame', async () => {
+  await open();
+  const n = await ev(colours(`document.querySelector('#room canvas.world')`));
+  return n > 40 ? '' : `only ${n} colours`;
+});
+
+await scenario('with WebGL unavailable the static fallback stays, with no errors', async () => {
+  await open({ before: `const gc = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (t, ...a) { return /webgl/.test(t) ? null : gc.call(this, t, ...a); };` });
+  const r = await ev(`({ ready: document.documentElement.classList.contains('game-ready'), fallback: getComputedStyle(document.querySelector('.fallback')).display !== 'none', errs: window.__errs })`);
+  return !r.ready && r.fallback && !r.errs.length ? '' : JSON.stringify(r);
+});
+
+await scenario('a floor click walks Tim there', async () => {
+  await open();
+  const [x, y] = await ev(`(() => { ${CLIENT} const w = ${SCENE}.world; return client(w, w.project({ x: 5 * 8 + 4, y: 0, z: 11 * 8 + 4 })); })()`);
+  await clickAt(x, y);
+  for (let i = 0; i < 25; i++) {
+    await sleep(100);
+    const c = await ev(`${SCENE}.tim.cell()`);
+    if (c.col === 5 && c.row === 11) return '';
+  }
+  return `Tim is at ${JSON.stringify(await ev(`${SCENE}.tim.cell()`))}`;
+});
+
+await scenario('after a resize every object button still sits over its prop', async () => {
+  await open({ w: 1280, h: 800 });
+  const check = () => ev(`(() => { ${CLIENT} const w = ${SCENE}.world; return [...document.querySelectorAll('#room .obj')].map((b) => {
+    const [x, y] = client(w, w.project(w.anchorOf(b.dataset.object))); const r = b.getBoundingClientRect();
+    return x >= r.left - 1 && x <= r.right + 1 && y >= r.top - 1 && y <= r.bottom + 1 ? '' : b.dataset.object; }).filter(Boolean); })()`);
+  for (const [w, h, mobile] of [[900, 700, false], [375, 812, true]]) {
+    await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
+    await sleep(600);
+    const bad = await check();
+    if (bad.length) return `${w}px: ${bad.join(', ')}`;
+  }
+  return '';
+});
+
+await scenario('the whiteboard numbers are big enough to read on a laptop', async () => {
+  await open({ w: 1280, h: 720 });
+  await sleep(600);
+  const r = await ev(`({ board: document.querySelector('[data-object="whiteboard"]').getBoundingClientRect().height, lines: [...document.querySelectorAll('#room .board-line')].map((l) => l.getBoundingClientRect().height) })`);
+  return r.board >= 60 && r.lines.length === 4 && r.lines.every((h) => h >= 9) ? '' : JSON.stringify(r);
+});
+
+await scenario('hovering an object highlights its prop', async () => {
+  await open();
+  const bright = () => ev(`(() => { const w = ${SCENE}.world; w.renderNow(); const b = w.rectOf('map'); const c = document.createElement('canvas'); c.width = w.canvas.width; c.height = w.canvas.height; const x = c.getContext('2d'); x.drawImage(w.canvas, 0, 0);
+    const d = x.getImageData(Math.round(b.x), Math.round(b.y), Math.max(1, Math.round(b.w)), Math.max(1, Math.round(b.h))).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i] + d[i + 1] + d[i + 2]; return s / (d.length / 4); })()`);
+  const before = await bright();
+  await ev(`document.querySelector('[data-object="map"]').dispatchEvent(new PointerEvent('pointerenter'))`); await sleep(100);
+  const lit = await bright();
+  await ev(`document.querySelector('[data-object="map"]').dispatchEvent(new PointerEvent('pointerleave'))`); await sleep(100);
+  const after = await bright();
+  return lit > before + 2 && Math.abs(after - before) < 1 ? '' : JSON.stringify({ before, lit, after });
+});
+
+// ---------- personality: camera swing, click marker, emotes ----------
+const rightDrag = async (x, y, dx) => {
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'right', buttons: 2, clickCount: 1 });
+  for (let i = 1; i <= 8; i++) await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x + (dx * i) / 8, y, button: 'right', buttons: 2 });
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x + dx, y, button: 'right', buttons: 0, clickCount: 1 });
+};
+const roomCentre = () => ev(`(() => { const r = document.getElementById('room').getBoundingClientRect(); return [r.left + r.width * 0.5, r.top + r.height * 0.8]; })()`);
+
+await scenario('right-drag swings the camera within its limits and it eases back', async () => {
+  await open();
+  const [x, y] = await roomCentre();
+  await rightDrag(x, y, -400);
+  await sleep(100);
+  const s0 = await ev(`${SCENE}.world.swing()`);
+  if (s0 !== -10) return `swing after drag ${s0}`;
+  await sleep(6000);
+  const s1 = await ev(`${SCENE}.world.swing()`);
+  return s1 === 0 ? '' : `swing after 6 s ${s1}`;
+});
+
+await scenario('tab focus after a swing shows the tip over the prop', async () => {
+  await open();
+  await ev(`${SCENE}.world.setSwing(20); ${SCENE}.world.renderNow(); const b = document.querySelector('[data-object="camera"]'); b.focus(); b.dispatchEvent(new FocusEvent('focus'));`);
+  await sleep(100);
+  const r = await ev(`(() => { const t = document.querySelector('#room .tip').getBoundingClientRect(); const b = document.querySelector('[data-object="camera"]').getBoundingClientRect(); const cx = t.left + t.width / 2; return { cx, l: b.left, r: b.right, hidden: document.querySelector('#room .tip').hidden }; })()`);
+  return !r.hidden && r.cx >= r.l - 1 && r.cx <= r.r + 1 ? '' : JSON.stringify(r);
+});
+
+await scenario('right-click outside the room and swings during a panel are left alone', async () => {
+  await open();
+  const hud = await ev(`(() => { const e = new MouseEvent('contextmenu', { bubbles: true, cancelable: true }); document.querySelector('.hud').dispatchEvent(e); return e.defaultPrevented; })()`);
+  if (hud) return 'contextmenu on the HUD was prevented';
+  const inRoom = await ev(`(() => { const e = new MouseEvent('contextmenu', { bubbles: true, cancelable: true }); document.querySelector('#room canvas.world').dispatchEvent(e); return e.defaultPrevented; })()`);
+  if (!inRoom) return 'contextmenu in the room was not prevented';
+  await ev(`document.querySelector('[data-hud="contact"]').click()`); await sleep(400);
+  const [x, y] = await roomCentre();
+  await rightDrag(x, y, 300);
+  await sleep(100);
+  const s = await ev(`${SCENE}.world.swing()`);
+  return s === 0 ? '' : `swing with a panel open: ${s}`;
+});
+
+await scenario('the pager buzz shows an alert emote over Tim', async () => {
+  const fast = `const st = window.setTimeout; window.setTimeout = (f, ms, ...a) => st(f, ms === 15000 ? 50 : ms, ...a);`;
+  await open({ before: `try { sessionStorage.clear(); } catch {} ${fast}` });
+  for (let i = 0; i < 20; i++) { if (await ev(`!!document.querySelector('#room .emote[data-emote="alert"]')`)) return ''; await sleep(100); }
+  return 'no alert emote';
+});
+
+await scenario('a floor click drops a marker', async () => {
+  await open();
+  const [x, y] = await ev(`(() => { ${CLIENT} const w = ${SCENE}.world; return client(w, w.project({ x: 22 * 8 + 4, y: 0, z: 9 * 8 + 4 })); })()`);
+  await clickAt(x, y);
+  await sleep(100);
+  const m = await ev(`${SCENE}.world.lastMark`);
+  return m && m.col === 22 && m.row === 9 ? '' : `mark ${JSON.stringify(m) ?? 'none'}`;
+});
+
+await scenario('the whiteboard numbers dim with the room at night', async () => {
+  await open();
+  const f = await ev(`(() => { document.getElementById('room').dataset.sky = 'night'; return getComputedStyle(document.querySelector('#room .board-overlay')).filter; })()`);
+  const m = /brightness\(([\d.]+)\)/.exec(f || '');
+  return m && +m[1] < 0.8 ? '' : `filter ${f}`;
+});
+
+// ---------- final review fixes ----------
+await scenario('a click on each prop opens that prop, on a laptop and a phone', async () => {
+  for (const o of [{ w: 1280, h: 720 }, { w: 375, h: 812, mobile: true }]) {
+    await open(o);
+    const pts = await ev(`(() => { ${CLIENT} const sc = ${SCENE}; window.__acts = []; sc.activate = (id) => { window.__acts.push(id); };
+      document.querySelector('#room .bubble')?.remove();
+      return [...document.querySelectorAll('#room .obj')].map((b) => [b.dataset.object, ...client(sc.world, sc.world.project(sc.world.anchorOf(b.dataset.object)))]); })()`);
+    const bad = [];
+    for (const [id, x, y] of pts) {
+      await ev(`window.__acts = []`);
+      await clickAt(x, y);
+      await sleep(30);
+      const got = await ev(`window.__acts[0] ?? null`);
+      if (got !== id) bad.push(`${id}->${got}`);
+    }
+    if (bad.length) return `${o.w}px: ${bad.join(', ')}`;
+  }
+  return '';
+});
+
+await scenario('a WebGL context that never comes back brings back the static page', async () => {
+  await open();
+  await ev(`(() => { const w = ${SCENE}.world; window.__renders = 0; const r = w.renderNow; w.renderNow = () => { window.__renders++; r(); };
+    const gl = w.canvas.getContext('webgl2') || w.canvas.getContext('webgl'); gl.getExtension('WEBGL_lose_context').loseContext(); w.invalidate(); })()`);
+  await sleep(600);
+  const spins = await ev(`window.__renders`);
+  if (spins > 2) return `render loop kept spinning while lost: ${spins} calls`;
+  await sleep(4500);
+  const r = await ev(`({ ready: document.documentElement.classList.contains('game-ready'), fallback: getComputedStyle(document.querySelector('.fallback')).display !== 'none', errs: window.__errs })`);
+  return !r.ready && r.fallback && !r.errs.length ? '' : JSON.stringify(r);
+});
+
+await scenario('wheel zoom stays in range and eases back with the swing', async () => {
+  await open();
+  const [x, y] = await roomCentre();
+  await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY: -800 });
+  await sleep(100);
+  const z0 = await ev(`${SCENE}.world.zoom()`);
+  if (z0 < 1) return `zoomed in past the fitted frame: ${z0}`;
+  await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY: 400 });
+  await sleep(100);
+  const z1 = await ev(`${SCENE}.world.zoom()`);
+  if (!(z1 > 1)) return `wheel did not zoom out: ${z1}`;
+  await sleep(6000);
+  const z2 = await ev(`${SCENE}.world.zoom()`);
+  return Math.abs(z2 - 1) < 1e-6 ? '' : `zoom after 6 s ${z2}`;
+});
+
+// ---------- the 3D world on its own test page ----------
+await scenario('world: renders a non-blank frame', async () => {
+  await open({ path: WORLD });
+  const err = await ev(`window.__worldError || ''`);
+  if (err) return err;
+  const n = await ev(colours('window.__world.canvas'));
+  return n > 40 ? '' : `only ${n} colours`;
+});
+
+await scenario('world: every object is visible and pickable at its anchor', async () => {
+  for (const o of [{ w: 1280, h: 720 }, { w: 375, h: 812, mobile: true }]) {
+    await open({ path: WORLD, ...o });
+    const bad = await ev(`(async () => { ${CLIENT} const { OBJECTS } = await import('/assets/game/objects.js'); const w = window.__world;
+      return OBJECTS.map((ob) => { const [x, y] = client(w, w.project(w.anchorOf(ob.id))); const hit = w.pickObject(x, y); return hit === ob.id ? '' : ob.id + '->' + hit; }).filter(Boolean); })()`);
+    if (!Array.isArray(bad) || bad.length) return `${o.w}px: ${JSON.stringify(bad)}`;
+  }
+  return '';
+});
+
+await scenario('world: the whole room is inside the frame', async () => {
+  for (const o of [{ w: 1280, h: 720 }, { w: 375, h: 812, mobile: true }]) {
+    await open({ path: WORLD, ...o });
+    const out = await ev(`(() => { const w = window.__world, { renderW: W, renderH: H } = w.frame, out = [];
+      for (const x of [0, 240]) for (const y of [0, 72]) for (const z of [0, 112]) { const p = w.project({ x, y, z }); if (p.x < -2 || p.y < -2 || p.x > W + 2 || p.y > H + 2) out.push([x, y, z, Math.round(p.x), Math.round(p.y)]); }
+      return out; })()`);
+    if (out.length) return `${o.w}px corners outside: ${JSON.stringify(out)}`;
+  }
+  return '';
+});
+
+await scenario('world: setFrame swaps a prop texture', async () => {
+  await open({ path: WORLD });
+  const r = await ev(`(() => { const w = window.__world; const b = w.rectOf('laptop');
+    const grab = () => { const c = document.createElement('canvas'); c.width = w.canvas.width; c.height = w.canvas.height; const x = c.getContext('2d'); x.drawImage(w.canvas, 0, 0); return [...x.getImageData(Math.round(b.x), Math.round(b.y), Math.max(1, Math.round(b.w)), Math.max(1, Math.round(b.h))).data]; };
+    const a = grab(); w.setFrame('laptop', 1); w.renderNow(); const c = grab(); let diff = 0; for (let i = 0; i < a.length; i++) if (a[i] !== c[i]) diff++; return diff; })()`);
+  return r > 0 ? '' : 'monitor pixels did not change';
+});
+
+await scenario('world: a 2x screen still renders at pixel ratio 1', async () => {
+  await open({ path: WORLD, dpr: 2 });
+  const r = await ev(`({ cw: window.__world.canvas.width, rw: window.__world.frame.renderW })`);
+  return r.cw === r.rw ? '' : JSON.stringify(r);
+});
+
+await scenario('world: survives a lost WebGL context', async () => {
+  await open({ path: WORLD });
+  await ev(`(() => { const gl = window.__world.canvas.getContext('webgl2') || window.__world.canvas.getContext('webgl'); window.__lose = gl.getExtension('WEBGL_lose_context'); window.__lose.loseContext(); })()`);
+  await sleep(200);
+  await ev(`window.__lose.restoreContext()`);
+  await sleep(500);
+  const n = await ev(colours('window.__world.canvas'));
+  const errs = await ev(`window.__errs`);
+  return n > 40 && !errs.length ? '' : JSON.stringify({ n, errs });
+});
+
+// ---------- Tim in the world (same test page) ----------
+await scenario('tim: walks a diagonal path and faces his heading', async () => {
+  await open({ path: WORLD });
+  const r = await ev(`(async () => { const t = window.__tim; if (!t) return { err: window.__worldError || 'no __tim' };
+    const poses = new Set(); const spy = setInterval(() => poses.add(t.pose), 30);
+    const ok = await t.walkTo({ col: 20, row: 11 }); clearInterval(spy);
+    return { ok, cell: t.cell(), poses: [...poses] }; })()`);
+  if (r.err) return r.err;
+  if (!r.ok || r.cell.col !== 20 || r.cell.row !== 11) return JSON.stringify(r);
+  return r.poses.some((p) => /^tim_walk_(down|right)$/.test(p)) ? '' : `poses ${JSON.stringify(r.poses)}`;
+});
+
+await scenario('tim: a newer walk cancels the older one', async () => {
+  await open({ path: WORLD });
+  const r = await ev(`(async () => { const t = window.__tim; const a = t.walkTo({ col: 2, row: 12 }); const b = t.walkTo({ col: 25, row: 3 }); return [await a, await b, t.cell()]; })()`);
+  return r[0] === false && r[1] === true && r[2].col === 25 && r[2].row === 3 ? '' : JSON.stringify(r);
+});
+
+await scenario('tim: the name tag follows him', async () => {
+  await open({ path: WORLD });
+  const y = () => ev(`+document.querySelector('#room .tim').style.getPropertyValue('--y')`);
+  await ev(`window.__tim.walkTo({ col: 13, row: 10 })`); await sleep(100);
+  const y0 = await y();
+  await ev(`window.__tim.walkTo({ col: 13, row: 2 })`); await sleep(100);
+  const y1 = await y();
+  return y1 < y0 - 10 ? '' : `name tag y ${y0} -> ${y1}`;
+});
+
+await scenario('tim: an emote shows above him and goes away', async () => {
+  await open({ path: WORLD });
+  await ev(`window.__tim.emote('heart', 300)`); await sleep(80);
+  const on = await ev(`!!document.querySelector('#room .emote[data-emote="heart"]')`);
+  await sleep(500);
+  const off = await ev(`!document.querySelector('#room .emote[data-emote="heart"]')`);
+  return on && off ? '' : JSON.stringify({ on, off });
 });
 
 ws.close(); cleanup();

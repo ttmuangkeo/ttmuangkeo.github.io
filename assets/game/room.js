@@ -1,12 +1,16 @@
-// Pixel room homepage: builds the room once JS runs. If anything throws, the static
+// Pixel office homepage, rendered in 3D: builds the room once JS runs. If anything throws, the static
 // fallback (intro + story link) stays on screen instead of a blank page.
-import { SPRITES, WINDOW as WIN, paintSprite } from './sprites.js';
-import { OBJECTS, DECOR, ROOM } from './objects.js';
-import { fitScale, buildGrid, findPath, nextWalkId, walkSpeed, NATIVE_W, NATIVE_H } from './grid.js';
+import { SPRITES, paintSprite } from './sprites.js';
+import { OBJECTS, ROOM, WINDOW_SPOT } from './objects.js';
+import { nextWalkId } from './grid.js';
 import { PANELS } from './panels.js';
 import { createFoundState } from './state.js';
 import { KEY_DIRS, KONAMI, nextCell, objectInReach, createSequence } from './controls.js';
-import { skyNow } from './sky.js';
+import { skyNow, lightFor } from './sky.js';
+import { frameFor, quadTransform } from './view.js';
+import { createWorld } from './world.js';
+import { createTim } from './tim.js';
+import { place } from './dom.js';
 import { createIncidentPanel } from './incident.js';
 import { createMigrationPanel } from './migration.js';
 
@@ -225,7 +229,9 @@ function setupHudMenu() {
   });
 }
 
-function showBubble(room, scene, html, { x, y, actions = [] } = {}) {
+// A speech bubble anchored to a point in render pixels. `at` is re-read on every reproject,
+// so bubbles follow their anchor through resizes and camera swings.
+function showBubble(room, scene, html, { x, y, at, actions = [] } = {}) {
   room.querySelector('.bubble')?.remove();
   const b = doc.createElement('div');
   b.className = 'bubble';
@@ -238,10 +244,23 @@ function showBubble(room, scene, html, { x, y, actions = [] } = {}) {
     for (const a of actions) row.append(a);
     b.append(row);
   }
-  place(b, x, y, 0, 0);
+  b.anchor = at ?? (() => ({ x, y }));
+  const p = b.anchor();
+  place(b, p.x, p.y, 0, 0);
   b.style.zIndex = '600';
   room.append(b);
+  requestAnimationFrame(() => keepInside(room, b)); // after the caller adds its placement class
   return b;
+}
+
+// Nudges a bubble back inside the room when its anchor would push it past an edge.
+function keepInside(room, b) {
+  if (!b.isConnected) return;
+  b.style.translate = '';
+  const r = room.getBoundingClientRect(), q = b.getBoundingClientRect();
+  const dx = Math.max(0, r.left + 4 - q.left) - Math.max(0, q.right - (r.right - 4));
+  const dy = Math.max(0, r.top + 4 - q.top) - Math.max(0, q.bottom - (r.bottom - 4));
+  if (dx || dy) b.style.translate = `${dx}px ${dy}px`;
 }
 
 const doc = document;
@@ -249,109 +268,7 @@ const PHONE_QUERY = '(max-width: 640px), (orientation: portrait) and (max-width:
 const USE_MS = 700;
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const cellFeet = ({ col, row }) => ({ x: col * ROOM.cell + ROOM.cell / 2, y: row * ROOM.cell + ROOM.cell - 1 });
-
-// ---------- mini Tim ----------
-function createTim(room) {
-  const sheets = {};
-  for (const key of ['tim_idle_down', 'tim_walk_down', 'tim_walk_up', 'tim_walk_left', 'tim_walk_right', 'tim_use', 'tim_wave']) {
-    sheets[key] = SPRITES[key].frames.map((f) => paintSprite(f));
-  }
-  const el = doc.createElement('div');
-  el.className = 'tim';
-  el.setAttribute('aria-hidden', 'true');
-  const canvas = doc.createElement('canvas');
-  canvas.width = 10; canvas.height = 20; canvas.className = 'px';
-  el.append(canvas);
-  room.append(el);
-  const ctx = canvas.getContext('2d');
-  const grid = buildGrid(ROOM.cols, ROOM.rows, ROOM.blocked, ROOM.floorTopRow);
-
-  const tim = {
-    el, grid,
-    pos: cellFeet(ROOM.start),
-    walkId: 0,
-    walking: false,
-    pose: 'idle',
-    lastAction: performance.now(),
-    show(sheet, i = 0) {
-      tim.pose = sheet === 'tim_idle_down' ? 'idle' : sheet;
-      const frames = sheets[sheet];
-      ctx.clearRect(0, 0, 10, 20);
-      ctx.drawImage(frames[i % frames.length], 0, 0);
-    },
-    moveTo(x, y) {
-      tim.pos = { x, y };
-      place(el, x - 5, y - 19, 10, 20);
-    },
-    cell() {
-      return { col: Math.floor(tim.pos.x / ROOM.cell), row: Math.floor(tim.pos.y / ROOM.cell) };
-    },
-    stride: 0, // distance walked so far, so chained one-cell steps keep cycling the walk frames
-    // Walks to a cell. Resolves true on arrival, false if a newer walk took over.
-    // settle: false keeps the walk pose at the end (keyboard steps chain into the next one).
-    async walkTo(target, { settle = true } = {}) {
-      const id = (tim.walkId = nextWalkId(tim.walkId));
-      tim.lastAction = performance.now();
-      tim.walking = true;
-      try { return await tim.walkPath(id, target, settle); } finally { if (id === tim.walkId) tim.walking = false; }
-    },
-    async walkPath(id, target, settle) {
-      const path = findPath(grid, tim.cell(), target);
-      if (!path.length) return tim.cell().col === target.col && tim.cell().row === target.row;
-      if (reducedMotion() && path.length === 1) { // a single keyboard step: move, no fade
-        const end = cellFeet(target);
-        tim.moveTo(end.x, end.y);
-        await sleep(90);
-        return id === tim.walkId;
-      }
-      if (reducedMotion()) {
-        el.style.opacity = '0';
-        await sleep(120);
-        if (id !== tim.walkId) return false;
-        const end = cellFeet(target);
-        tim.moveTo(end.x, end.y);
-        el.style.opacity = '1';
-        return true;
-      }
-      const speed = walkSpeed(path.length * ROOM.cell);
-      let travelled = 0;
-      for (const step of path) {
-        const goal = cellFeet(step);
-        const dx = goal.x - tim.pos.x, dy = goal.y - tim.pos.y;
-        const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
-        const start = { ...tim.pos };
-        const dist = Math.hypot(dx, dy);
-        let t0 = null;
-        await new Promise((resolve) => {
-          const tick = (now) => {
-            if (id !== tim.walkId) return resolve();
-            if (t0 === null) t0 = now;
-            const k = Math.min(1, ((now - t0) / 1000) * speed / dist);
-            tim.moveTo(start.x + dx * k, start.y + dy * k);
-            tim.show(`tim_walk_${dir}`, Math.floor((tim.stride + travelled + dist * k) / 4));
-            if (k < 1) requestAnimationFrame(tick); else resolve();
-          };
-          requestAnimationFrame(tick);
-        });
-        if (id !== tim.walkId) { tim.stride += travelled; return false; }
-        travelled += dist;
-      }
-      tim.stride += travelled;
-      if (settle) tim.show('tim_idle_down');
-      return true;
-    },
-  };
-  // A friendly wave (a still wave pose under reduced motion).
-  tim.wave = async () => {
-    if (reducedMotion()) { tim.show('tim_wave', 0); await sleep(1200); tim.show('tim_idle_down'); return; }
-    for (let i = 0; i < 6; i++) { if (tim.walking) return; tim.show('tim_wave', i); await sleep(200); }
-    if (!tim.walking) tim.show('tim_idle_down');
-  };
-  tim.moveTo(tim.pos.x, tim.pos.y);
-  tim.show('tim_idle_down');
-  return tim;
-}
+const topCentre = (scene) => () => ({ x: scene.view.w / 2, y: 4 });
 
 // Walks Tim to an object and plays its use animation. Resolves true if he got there.
 async function useObject(tim, scene, id) {
@@ -360,8 +277,7 @@ async function useObject(tim, scene, id) {
   if (!arrived) return false;
   const walk = tim.walkId;               // any newer walk or panel change bumps this
   const stillMine = () => walk === tim.walkId;
-  const btn = scene.buttons.find((b) => b.dataset.object === id);
-  const setObjFrame = (i) => paintFrame(btn, SPRITES[o.sprite], i);
+  const setObjFrame = (i) => scene.world.setFrame(id, i);
   const pose = { left: 'tim_walk_left', right: 'tim_walk_right' }[o.face] ?? 'tim_use';
   if (reducedMotion()) {
     tim.show(pose);
@@ -370,9 +286,9 @@ async function useObject(tim, scene, id) {
   if (o.anim === 'photo') {
     const flash = doc.createElement('div');
     flash.className = 'flash';
-    place(flash, 0, 0, NATIVE_W, NATIVE_H);
+    place(flash, 0, 0, scene.view.w, scene.view.h);
     flash.style.zIndex = '700';
-    btn.parentElement.append(flash);
+    scene.room.append(flash);
     setTimeout(() => flash.remove(), 120);
   }
   const steps = 4;
@@ -387,24 +303,6 @@ async function useObject(tim, scene, id) {
   return stillMine();
 }
 
-// Absolutely positions an element in native room pixels; CSS multiplies by --s.
-function place(el, x, y, w, h) {
-  el.style.setProperty('--x', x);
-  el.style.setProperty('--y', y);
-  el.style.setProperty('--w', w);
-  el.style.setProperty('--h', h);
-  el.style.zIndex = String(10 + y + h); // deeper on screen = drawn in front
-}
-
-// Redraws an object button's sprite at a given frame (idle blinks, use animations).
-function paintFrame(btn, sprite, i) {
-  const canvas = btn?.querySelector('canvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(paintSprite(sprite.frames[Math.min(i, sprite.frames.length - 1)]), 0, 0);
-}
-
 function spriteCanvas(key, frame = 0) {
   const c = paintSprite(SPRITES[key].frames[frame]);
   c.className = 'px';
@@ -412,66 +310,83 @@ function spriteCanvas(key, frame = 0) {
   return c;
 }
 
-function buildRoom(room) {
-  const backdrop = spriteCanvas('room');
-  backdrop.classList.add('layer');
-  place(backdrop, 0, 0, NATIVE_W, NATIVE_H);
-  backdrop.style.zIndex = '0';
-  room.append(backdrop);
-
-  const decor = {};
-  for (const d of DECOR) {
-    const s = SPRITES[d.sprite];
-    const c = spriteCanvas(d.sprite);
-    c.classList.add('layer');
-    place(c, d.x, d.y, s.w, s.h);
-    if (d.flat) c.style.zIndex = '1';
-    room.append(c);
-    decor[d.sprite] = c;
-  }
-
+// The HTML layer over the 3D room: one real button per object, laid over its prop,
+// and the one tooltip. reproject() re-lays everything after any render.
+function buildOverlay(room, world) {
   const tip = doc.createElement('div');
   tip.className = 'tip';
   tip.hidden = true;
   room.append(tip);
+  let tipAnchor = null;
 
-  // The one tooltip, shown above an object, the window, or Tim.
   const tipAt = (x, y, text) => {
     tip.textContent = text;
+    tipAnchor = () => ({ x, y });
     place(tip, x, Math.max(2, y), 0, 0);
     tip.style.zIndex = '500';
     tip.hidden = false;
   };
-  const tipFor = (o, text = o.label) => tipAt(o.x + SPRITES[o.sprite].w / 2, o.y - 7, text);
-  const hide = () => { tip.hidden = true; };
+  const topOf = (key) => { const r = world.rectOf(key); return { x: r.x + r.w / 2, y: r.y - 2 }; };
+  const tipFor = (o, text = o.label) => {
+    tip.textContent = text;
+    tipAnchor = () => topOf(o.id);
+    const p = tipAnchor();
+    place(tip, p.x, Math.max(2, p.y), 0, 0);
+    tip.style.zIndex = '500';
+    tip.hidden = false;
+  };
+  const hide = () => { tip.hidden = true; tipAnchor = null; };
 
   const buttons = OBJECTS.map((o) => {
-    const s = SPRITES[o.sprite];
     const b = doc.createElement('button');
     b.type = 'button';
     b.className = 'obj';
     b.dataset.object = o.id;
     b.setAttribute('aria-label', o.ariaLabel);
-    b.append(spriteCanvas(o.sprite));
-    place(b, o.x, o.y, s.w, s.h);
-    if (o.above) b.style.zIndex = String(Number(b.style.zIndex) + o.above);
-    const show = () => tipFor(o);
-    b.addEventListener('pointerenter', show);
-    b.addEventListener('focus', show);
-    b.addEventListener('pointerleave', hide);
-    b.addEventListener('blur', hide);
+    // A button covers its prop's whole on-screen box (plus touch padding), which can overlap a
+    // neighbour; under the pointer, the prop actually hit wins (keyboard focus uses the button's own).
+    const pointed = (e) => OBJECTS.find((x) => x.id === world.pickObject(e.clientX, e.clientY)) ?? o;
+    let shown = null;
+    const show = (target) => { if (shown === target) return; shown = target; tipFor(target); world.highlight(target.id); };
+    const off = () => { shown = null; hide(); world.highlight(null); };
+    b.addEventListener('pointerenter', (e) => show(pointed(e)));
+    b.addEventListener('pointermove', (e) => show(pointed(e)));
+    b.addEventListener('focus', () => show(o));
+    b.addEventListener('pointerleave', off);
+    b.addEventListener('blur', off);
     room.append(b);
     return b;
   });
-  return { buttons, tip, decor, tipAt, tipFor, hideTip: hide };
+
+  const extra = []; // other overlays that follow the world (window hit area, whiteboard numbers)
+  const reproject = () => {
+    let top = 0;
+    for (const b of buttons) {
+      const r = world.rectOf(b.dataset.object);
+      place(b, r.x, r.y, r.w, r.h);
+      top = Math.max(top, Number(b.style.zIndex));
+    }
+    // `above` lifts a button over every other object's padded hit area (the monitors over the pager)
+    for (const b of buttons) {
+      const o = OBJECTS.find((x) => x.id === b.dataset.object);
+      if (o.above) b.style.zIndex = String(top + o.above);
+    }
+    if (tipAnchor && !tip.hidden) { const p = tipAnchor(); place(tip, p.x, Math.max(2, p.y), 0, 0); tip.style.zIndex = '500'; }
+    for (const bub of room.querySelectorAll('.bubble')) { if (bub.anchor) { const p = bub.anchor(); place(bub, p.x, p.y, 0, 0); bub.style.zIndex = '600'; keepInside(room, bub); } }
+    for (const f of extra) f();
+  };
+  world.onRender(reproject);
+  return { buttons, tip, tipAt, tipFor, hideTip: hide, reproject, follow: (f) => extra.push(f) };
 }
 
 // ---------- the whiteboard: the four headline numbers, read from the story page ----------
 // Desktop only (CSS hides it on phones). aria-hidden: the whiteboard's panel says the same thing.
-// If the story can't load, the board keeps its sketched lines and nothing is shown.
+// The overlay is laid out at the board's sprite size and pinned onto its projected face with a
+// matrix3d, so it stays crisp HTML text. If the story can't load, the board keeps its sketch.
 function createBoard(scene) {
   const btn = scene.buttons.find((b) => b.dataset.object === 'whiteboard');
   if (!btn) return;
+  const { w: BW, h: BH } = SPRITES.whiteboard;
   loadStory().then((story) => {
     const lines = [...story.querySelectorAll('#features .numbers li[data-board]')].map((li) => li.dataset.board.trim()).filter(Boolean);
     if (!lines.length) return;
@@ -488,42 +403,41 @@ function createBoard(scene) {
       return line;
     }));
     btn.append(board);
+    const pin = () => {
+      const s = scene.frame.scale;
+      const r = scene.world.rectOf('whiteboard');
+      const quad = scene.world.quadOf('whiteboard').map(([x, y]) => [(x - r.x) * s, (y - r.y) * s]);
+      board.style.transform = quadTransform(BW * s, BH * s, quad);
+    };
+    scene.follow(pin);
+    pin();
   }).catch(() => {});
 }
 
 // ---------- the window: Seattle's real time of day, rain now and then, a secret aurora ----------
 function createWindow(room, scene) {
-  const canvas = doc.createElement('canvas');
-  canvas.width = WIN.w; canvas.height = WIN.h;
-  canvas.className = 'px layer';
-  canvas.setAttribute('aria-hidden', 'true');
-  place(canvas, WIN.x, WIN.y, WIN.w, WIN.h);
-  canvas.style.zIndex = '1';
-  room.append(canvas);
+  const { world } = scene;
   // Pointer-only hit area: hover shows Seattle's time; five quick taps call up the aurora
   // (keyboard visitors get the same secret with the Konami code).
   const hit = doc.createElement('div');
   hit.className = 'win';
   hit.setAttribute('aria-hidden', 'true');
-  place(hit, WIN.x, WIN.y, WIN.w, WIN.h);
-  hit.style.zIndex = '2';
   room.append(hit);
+  scene.follow(() => { const r = world.rectOf('window'); place(hit, r.x, r.y, r.w, r.h); hit.style.zIndex = '2'; });
 
-  const cache = {};
-  const frames = (key) => (cache[key] ??= SPRITES[key].frames.map((f) => paintSprite(f)));
   let now = skyNow();
   let auroraUntil = 0;
   let frame = 0;
-  const key = () => (Date.now() < auroraUntil ? 'window_aurora' : `window_${now.phase}${now.rain ? '_rain' : ''}`);
+  const aurora = () => Date.now() < auroraUntil;
+  const key = () => (aurora() ? 'window_aurora' : `window_${now.phase}${now.rain ? '_rain' : ''}`);
   const draw = () => {
     const k = key();
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, WIN.w, WIN.h);
-    ctx.drawImage(frames(k)[frame % 2], 0, 0);
+    world.setSky(k, frame % 2);
+    world.setLight(lightFor({ phase: now.phase, rain: now.rain && !aurora(), aurora: aurora() }));
     room.dataset.sky = k.replace('window_', '');
   };
-  const text = () => (Date.now() < auroraUntil ? 'Northern lights · just like home' : now.text);
-  hit.addEventListener('pointerenter', () => scene.tipAt(WIN.x + WIN.w / 2, WIN.y - 7, text()));
+  const text = () => (aurora() ? 'Northern lights · just like home' : now.text);
+  hit.addEventListener('pointerenter', () => { const r = world.rectOf('window'); scene.tipAt(r.x + r.w / 2, r.y - 2, text()); });
   hit.addEventListener('pointerleave', scene.hideTip);
   let taps = 0, lastTap = 0;
   hit.addEventListener('click', (e) => {
@@ -536,13 +450,14 @@ function createWindow(room, scene) {
   setInterval(() => { if (!document.hidden) { now = skyNow(); draw(); } }, 60_000);
 
   const sky = {
+    isRaining: () => now.rain && !aurora(),
     tick(t) { frame = t; draw(); },
     aurora() {
       auroraUntil = Date.now() + 60_000;
       frame = 0;
       draw();
       scene.hideTip();
-      const b = showBubble(room, scene, 'Northern lights! Just like back home in Alaska.', { x: NATIVE_W / 2, y: 4 });
+      const b = showBubble(room, scene, 'Northern lights! Just like back home in Alaska.', { at: topCentre(scene) });
       b.classList.add('bubble--top');
       setTimeout(() => b.remove(), 5000);
       scene.tim.wave();
@@ -572,7 +487,7 @@ function setupKeyboard(scene) {
       while (held.length && !scene.panels.isOpen()) {
         const dir = held.at(-1);
         const next = nextCell(tim.cell(), dir);
-        if (!tim.grid.walkable(next.col, next.row)) { tim.show(`tim_walk_${dir}`, 0); facingWall = true; break; }
+        if (!tim.grid.walkable(next.col, next.row)) { tim.face(dir); facingWall = true; break; }
         if (!(await tim.walkTo(next, { settle: false }))) break;
         hint();
       }
@@ -599,7 +514,8 @@ function setupKeyboard(scene) {
         scene.hideTip();
         scene.activate(o.id, scene.buttons.find((b) => b.dataset.object === o.id));
       } else {
-        scene.tipAt(tim.pos.x, tim.pos.y - 24, 'Walk up to something first');
+        const h = scene.world.project(tim.headPoint());
+        scene.tipAt(h.x, h.y, 'Walk up to something first');
         setTimeout(scene.hideTip, 1400);
       }
     }
@@ -613,16 +529,14 @@ function setupKeyboard(scene) {
 
 // ---------- the pager goes off once per visit and invites a triage run ----------
 const PAGE_AFTER_MS = 15_000;
-// On desktop the pager bubble hangs up and to the left of the pager, so it has the room's width to wrap in.
-const pagerRight = () => { const o = OBJECTS.find((obj) => obj.id === 'pager'); return o.x + SPRITES.pager.w; };
 function setupPager(room, scene) {
   const btn = scene.buttons.find((b) => b.dataset.object === 'pager');
-  const canvas = btn.querySelector('canvas');
-  const frames = SPRITES.pager.frames.map((f) => paintSprite(f));
   let session;
   try { session = sessionStorage; } catch { session = undefined; }
   let buzzing = false;
-  const draw = (i) => { const c = canvas.getContext('2d'); c.clearRect(0, 0, canvas.width, canvas.height); c.drawImage(frames[i], 0, 0); };
+  const draw = (i) => scene.world.setFrame('pager', i);
+  // On desktop the bubble hangs up and to the left of the pager, so it has the room's width to wrap in.
+  const pagerCorner = () => { const r = scene.world.rectOf('pager'); return { x: r.x + r.w, y: r.y }; };
   const pager = {
     isBuzzing: () => buzzing,
     stop() {
@@ -646,8 +560,9 @@ function setupPager(room, scene) {
       later.addEventListener('click', () => pager.stop());
       const phone = matchMedia(PHONE_QUERY).matches;
       const b = showBubble(room, scene, "Tim's pager is going off. Help him triage the ticket?",
-        phone ? { x: NATIVE_W / 2, y: 4, actions: [go, later] } : { x: pagerRight(), y: 64, actions: [go, later] });
+        { at: phone ? topCentre(scene) : pagerCorner, actions: [go, later] });
       b.classList.add('bubble--pager', phone ? 'bubble--top' : 'bubble--left');
+      scene.onPagerBuzz?.();
       return true;
     },
     tick(t) { if (buzzing) draw(t % 2); },
@@ -661,23 +576,85 @@ function setupPager(room, scene) {
   return pager;
 }
 
-function layout(room) {
+// ---------- camera swing (desktop): right-drag or a sideways trackpad swipe; wheel zooms a little ----------
+// Never on phones (one finger always means walk/tap) and never while a panel is open.
+// Four seconds after the last nudge the view eases back to the default (or snaps, under reduced motion).
+const SWING_PER_PX = 0.25;
+const SWING_RETURN_MS = 4000;
+function setupSwing(room, scene) {
+  const { world } = scene;
+  const allowed = () => !matchMedia(PHONE_QUERY).matches && !scene.panels.isOpen();
+  let drag = null, lastInput = 0, easing = 0;
+  const nudged = () => { lastInput = performance.now(); scheduleReturn(); };
+  room.addEventListener('contextmenu', (e) => e.preventDefault()); // only the room: right-click elsewhere stays normal
+  room.addEventListener('pointerdown', (e) => {
+    if (e.button !== 2 || !allowed()) return;
+    drag = { x: e.clientX, from: world.swing(), id: e.pointerId };
+    room.setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+  });
+  room.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    world.setSwing(drag.from + (e.clientX - drag.x) * SWING_PER_PX);
+    nudged();
+  });
+  const end = (e) => { if (drag && e.pointerId === drag.id) { drag = null; nudged(); } };
+  room.addEventListener('pointerup', end);
+  room.addEventListener('pointercancel', end);
+  room.addEventListener('wheel', (e) => {
+    if (!allowed()) return;
+    e.preventDefault();
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) world.setSwing(world.swing() - e.deltaX * 0.1);
+    else world.setZoom(world.zoom() * (1 + e.deltaY * 0.001));
+    nudged();
+  }, { passive: false });
+  function scheduleReturn() {
+    if (easing) return;
+    const step = (now) => {
+      easing = 0;
+      if (drag || (world.swing() === 0 && world.zoom() === 1)) return;
+      if (now - lastInput < SWING_RETURN_MS) { easing = requestAnimationFrame(step); return; }
+      if (reducedMotion()) { world.setSwing(0); world.setZoom(1); return; }
+      const s = world.swing(), z = world.zoom();
+      const d = Math.min(Math.abs(s), 60 / 30); // ~60°/s at 30 fps
+      world.setSwing(Math.abs(s) <= d ? 0 : s - Math.sign(s) * d);
+      world.setZoom(Math.abs(z - 1) <= 0.01 ? 1 : z - Math.sign(z - 1) * 0.01);
+      easing = requestAnimationFrame(step);
+    };
+    easing = requestAnimationFrame(step);
+  }
+}
+
+function currentFrame() {
   const hud = doc.querySelector('.hud');
   const hudH = hud ? hud.getBoundingClientRect().height : 0;
   doc.documentElement.style.setProperty('--hud-h', `${Math.ceil(hudH)}px`);
   const phone = matchMedia(PHONE_QUERY).matches;
-  const vw = doc.documentElement.clientWidth;
-  const s = fitScale(vw, innerHeight - 32, hudH, phone);
-  room.style.setProperty('--s', s);
   doc.documentElement.classList.toggle('is-phone', phone);
+  return frameFor(doc.documentElement.clientWidth, innerHeight - 32, hudH, phone);
+}
+
+function layout(room, scene) {
+  const f = currentFrame();
+  scene.frame = f;
+  scene.view = { w: f.renderW, h: f.renderH };
+  room.style.setProperty('--s', f.scale);
+  room.style.setProperty('--rw', f.renderW);
+  room.style.setProperty('--rh', f.renderH);
+  scene.world.resize(f);
+  scene.world.renderNow();
 }
 
 export function init() {
   const room = doc.getElementById('room');
   try {
     if (!room) throw new Error('#room missing');
-    const scene = buildRoom(room);
-    const tim = createTim(room);
+    const frame = currentFrame();
+    const world = createWorld(room, frame);
+    const scene = { room, world, frame, view: { w: frame.renderW, h: frame.renderH } };
+    Object.assign(scene, buildOverlay(room, world));
+    room.scene = scene; // for the browser tests
+    const tim = createTim(world, room, { start: ROOM.start });
     scene.tim = tim;
     scene.use = (id) => useObject(tim, scene, id);
     scene.panels = createPanels(scene);
@@ -713,6 +690,17 @@ export function init() {
       );
     };
     setupKeyboard(scene);
+    setupSwing(room, scene);
+    // Emotes: alert when the pager goes off, a heart when everything is found (both also under
+    // reduced motion, as still images); the rest are idle chatter in the idle loop below.
+    scene.onPagerBuzz = () => tim.emote('alert', 2500);
+    scene.onCelebrate = () => tim.emote('heart', 2500);
+    scene.onWander = () => tim.emote('note', 1500);
+    scene.onFloorWalk = (cell) => world.markFloor(cell);
+    let lastInput = performance.now();
+    const woke = () => { lastInput = performance.now(); tim.clearEmote('zzz'); };
+    addEventListener('pointerdown', woke);
+    addEventListener('keydown', woke);
     let pendingCelebration = false;
     scene.onPanelOpened = (id) => {
       if (id === 'pager' || id === 'incident') scene.pager.stop();
@@ -727,8 +715,9 @@ export function init() {
       const resume = doc.createElement('a');
       resume.className = 'bubble-btn'; resume.href = 'assets/Tim_Muangkeo_Resume.pdf'; resume.setAttribute('download', '');
       resume.textContent = 'Download resume';
-      const bubble = showBubble(room, scene, 'You found everything! Want to talk?', { x: NATIVE_W / 2, y: 4, actions: [contact, resume] });
+      const bubble = showBubble(room, scene, 'You found everything! Want to talk?', { at: topCentre(scene), actions: [contact, resume] });
       bubble.classList.add('bubble--top');
+      scene.onCelebrate?.();
       contact.focus();
     };
     // Click an object: Tim walks over, uses it, then its panel opens.
@@ -740,8 +729,20 @@ export function init() {
     // Opening or closing any panel cancels a walk in progress, so no stale panel pops up later.
     scene.onPanelChange = () => { tim.walkId = nextWalkId(tim.walkId); };
     for (const b of scene.buttons) {
-      b.addEventListener('click', (e) => { e.stopPropagation(); scene.activate(b.dataset.object, b); });
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // pointer clicks go to the prop under the pointer; keyboard clicks (detail 0) to the button's own object
+        const id = (e.detail && world.pickObject(e.clientX, e.clientY)) || b.dataset.object;
+        scene.activate(id, scene.buttons.find((x) => x.dataset.object === id) ?? b);
+      });
     }
+    // If the GPU drops the WebGL context and it doesn't come back, show the static page again.
+    let lostTimer = 0;
+    world.onContext((state) => {
+      clearTimeout(lostTimer);
+      if (state === 'lost') lostTimer = setTimeout(() => doc.documentElement.classList.remove('game-ready'), 4000);
+      else doc.documentElement.classList.add('game-ready');
+    });
     // HUD "Get in touch" opens the mailbox panel right away (the mailto link stays as the no-JS fallback).
     doc.querySelector('[data-hud="contact"]')?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -750,54 +751,56 @@ export function init() {
     // Warm the story page in the background so the first panel opens instantly.
     (window.requestIdleCallback || ((f) => setTimeout(f, 1200)))(() => loadStory().catch(() => {}));
 
+    layout(room, scene);
+    addEventListener('resize', () => layout(room, scene));
+
     // Welcome: Tim waves and says hi; the bubble goes away on the first interaction.
     const helloText = matchMedia(PHONE_QUERY).matches
       ? "Hey, I'm Tim — just a kid from Alaska. Tap around."
       : "Hey, I'm Tim — just a kid from Alaska. Walk with the arrow keys or WASD and press E to look at things, or just click around.";
-    const hello = showBubble(room, scene, helloText,
-      { x: tim.pos.x, y: tim.pos.y - 22 });
-    hello.classList.add('bubble--hello');
+    // On phones the room is small, so the greeting hangs under Tim instead of over the desk.
+    const phone = matchMedia(PHONE_QUERY).matches;
+    const hello = showBubble(room, scene, helloText, { at: () => world.project(phone ? tim.feetPoint() : tim.headPoint()) });
+    hello.classList.add('bubble--hello', ...(phone ? ['bubble--below'] : []));
     tim.wave();
     const dismiss = () => { hello.remove(); removeEventListener('pointerdown', dismiss); removeEventListener('keydown', dismiss); };
     addEventListener('pointerdown', dismiss);
     addEventListener('keydown', dismiss);
 
-    // Idle life: breathing, steam off the mug, and an occasional wander. Paused when the
-    // tab is hidden, a panel is open, Tim is busy, or the visitor prefers reduced motion.
-    const steamFrames = SPRITES.mug.frames.map((f) => paintSprite(f));
-    const mug = scene.decor.mug;
-    const rackFrames = SPRITES.rack.frames.map((f) => paintSprite(f));
-    const rackCanvas = rackBtn?.querySelector('canvas');
-    const laptopBtn = scene.buttons.find((b) => b.dataset.object === 'laptop');
-    const plantFrames = SPRITES.plant.frames.map((f) => paintSprite(f));
-    const plant = scene.decor.plant;
+    // Idle life: breathing, steam off the mug, rack lights, scrolling monitors, a swaying plant
+    // and an occasional wander. Paused when the tab is hidden, a panel is open, Tim is busy,
+    // or the visitor prefers reduced motion.
     let tick = 0;
     setInterval(() => {
       if (document.hidden || reducedMotion() || scene.panels.isOpen()) return;
       tick++;
       scene.sky.tick(tick);
       scene.pager.tick(tick);
-      if (rackCanvas) { const r = rackCanvas.getContext('2d'); r.clearRect(0, 0, rackCanvas.width, rackCanvas.height); r.drawImage(rackFrames[tick % 2], 0, 0); }
-      if (mug) { const m = mug.getContext('2d'); m.clearRect(0, 0, mug.width, mug.height); m.drawImage(steamFrames[tick % 2], 0, 0); }
-      if (tick % 2 === 0 && !tim.walking) paintFrame(laptopBtn, SPRITES.laptop, (tick / 2) % SPRITES.laptop.frames.length); // code scrolls, graphs move
-      if (plant && tick % 3 === 0) { const p = plant.getContext('2d'); p.clearRect(0, 0, plant.width, plant.height); p.drawImage(plantFrames[(tick / 3) % 2], 0, 0); }
+      world.setFrame('rack', tick % 2);
+      world.setFrame('mug', tick % 2); // steam
+      if (tick % 2 === 0 && !tim.walking) world.setFrame('laptop', tick / 2); // code scrolls, graphs move
+      if (tick % 3 === 0) world.setFrame('plant', tick / 3);
       if (tim.walking) return;
       if (tim.pose === 'idle') tim.show('tim_idle_down', tick % 2);
+      if (performance.now() - lastInput > 30_000) { if (!tim.emoting()) tim.emote('zzz', 600_000); return; } // dozing: no wandering
+      if (!tim.emoting() && Math.random() < 0.01) tim.emote('dots', 1500); // about once a minute
       if (performance.now() - tim.lastAction > 12000) {
+        scene.onWander?.();
         const spots = [];
-        for (let r = ROOM.floorTopRow + 2; r < ROOM.rows; r++) for (let c = 0; c < ROOM.cols; c++) if (tim.grid.walkable(c, r)) spots.push({ col: c, row: r });
-        tim.walkTo(spots[Math.floor(Math.random() * spots.length)]);
+        for (let r = 0; r < ROOM.rows; r++) for (let c = 0; c < ROOM.cols; c++) if (tim.grid.walkable(c, r)) spots.push({ col: c, row: r });
+        const rainy = scene.sky.isRaining() && Math.random() < 1 / 3;
+        if (rainy) tim.walkTo(WINDOW_SPOT).then((ok) => { if (ok) tim.face('up'); });
+        else tim.walkTo(spots[Math.floor(Math.random() * spots.length)]);
       }
     }, 600);
     room.addEventListener('click', (e) => { // floor click: just walk there
-      const r = room.getBoundingClientRect();
-      const s = r.width / NATIVE_W;
-      const target = { col: Math.floor((e.clientX - r.left) / s / ROOM.cell), row: Math.floor((e.clientY - r.top) / s / ROOM.cell) };
-      if (tim.grid.walkable(target.col, target.row)) tim.walkTo(target);
+      const target = world.pickFloor(e.clientX, e.clientY);
+      if (target && tim.grid.walkable(target.col, target.row)) { scene.onFloorWalk?.(target); tim.walkTo(target); }
     });
-    layout(room);
-    addEventListener('resize', () => layout(room));
+    world.renderNow();
     doc.documentElement.classList.add('game-ready');
+    performance.mark?.('room-ready');
+    layout(room, scene); // the HUD may change height once the game is ready
     return scene;
   } catch (err) {
     console.error('Pixel room failed to start; showing the fallback.', err);
