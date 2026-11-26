@@ -256,6 +256,8 @@ await scenario('closing the rack mid-run stops it cleanly, and the Incident log 
 
 await scenario('on phones a tap on the monitors opens the monitors, not the pager', async () => {
   await open({ w: 375, h: 812, mobile: true });
+  // walk to the desk so the eye-level camera has the monitors and pager in frame
+  await ev(`(async () => { const sc = document.getElementById('room').scene; document.querySelector('#room .bubble')?.remove(); await sc.tim.walkTo({ col: 21, row: 4 }); await new Promise((r) => setTimeout(r, 1500)); sc.world.renderNow(); })()`);
   const hit = await ev(`(() => { const r = document.querySelector('[data-object="laptop"]').getBoundingClientRect(); return [0.6, 0.8, 0.95].map((k) => document.elementFromPoint(r.left + r.width * k, r.top + r.height / 2)?.closest('.obj')?.dataset.object); })()`);
   return hit.every((h) => h === 'laptop') ? '' : `taps hit ${JSON.stringify(hit)}`;
 });
@@ -449,11 +451,11 @@ await scenario('the whiteboard numbers dim with the room at night', async () => 
 });
 
 // ---------- final review fixes ----------
-await scenario('a click on each prop opens that prop, on a laptop and a phone', async () => {
+await scenario('a click on each prop opens that prop, on a laptop and a phone (overview)', async () => {
   for (const o of [{ w: 1280, h: 720 }, { w: 375, h: 812, mobile: true }]) {
     await open(o);
     const pts = await ev(`(() => { ${CLIENT} const sc = ${SCENE}; window.__acts = []; sc.activate = (id) => { window.__acts.push(id); };
-      document.querySelector('#room .bubble')?.remove();
+      document.querySelector('#room .bubble')?.remove(); sc.world.setZoom(2); sc.world.renderNow();
       return [...document.querySelectorAll('#room .obj')].map((b) => [b.dataset.object, ...client(sc.world, sc.world.project(sc.world.anchorOf(b.dataset.object)))]); })()`);
     const bad = [];
     for (const [id, x, y] of pts) {
@@ -496,6 +498,46 @@ await scenario('wheel zoom stays in range and eases back with the swing', async 
   return Math.abs(z2 - 1) < 1e-6 ? '' : `zoom after 6 s ${z2}`;
 });
 
+// ---------- eye-level follow camera ----------
+await scenario('the eye-level camera follows Tim into every corner and keeps him in frame', async () => {
+  for (const o of [{ w: 1280, h: 720 }, { w: 375, h: 812, mobile: true }]) {
+    await open(o);
+    for (const cell of [{ col: 1, row: 12 }, { col: 28, row: 1 }, { col: 26, row: 13 }, { col: 9, row: 0 }]) {
+      const r = await ev(`(async () => { const sc = ${SCENE}; document.querySelector('#room .bubble')?.remove();
+        await sc.tim.walkTo(${JSON.stringify(cell)}); await new Promise((r) => setTimeout(r, 1500)); sc.world.renderNow();
+        const { renderW: W, renderH: H } = sc.world.frame; const f = sc.world.project(sc.tim.feetPoint()), h = sc.world.project(sc.tim.headPoint());
+        return { zoom: sc.world.zoom(), cell: sc.tim.cell(), f, h, W, H }; })()`);
+      if (r.zoom !== 1) return `zoom ${r.zoom}`;
+      if (r.cell.col !== cell.col || r.cell.row !== cell.row) return `${o.w}px: walk to ${JSON.stringify(cell)} ended at ${JSON.stringify(r.cell)}`;
+      const inside = (p) => p.x >= 0 && p.x <= r.W && p.y >= 0 && p.y <= r.H;
+      if (!inside(r.f) || !inside(r.h)) return `${o.w}px: Tim at ${JSON.stringify(cell)} out of frame ${JSON.stringify([r.f, r.h])}`;
+    }
+  }
+  return '';
+});
+
+await scenario('the eye-level camera is close: the room is wider than the frame', async () => {
+  await open();
+  const r = await ev(`(() => { const w = ${SCENE}.world; w.renderNow(); const a = w.project({ x: 0, y: 72, z: 0 }), c = w.project({ x: 240, y: 0, z: 112 });
+    return { span: c.x - a.x, W: w.frame.renderW }; })()`);
+  return r.span > r.W ? '' : JSON.stringify(r);
+});
+
+await scenario('keyboard focus on an off-screen prop brings it into view', async () => {
+  await open();
+  await ev(`(async () => { const sc = ${SCENE}; document.querySelector('#room .bubble')?.remove(); await sc.tim.walkTo({ col: 1, row: 1 }); await new Promise((r) => setTimeout(r, 1500)); })()`);
+  const before = await ev(`(() => { const w = ${SCENE}.world; w.renderNow(); return w.project(w.anchorOf('mailbox')).x; })()`);
+  const W = await ev(`${SCENE}.world.frame.renderW`);
+  if (before <= W) return `door already in view at x ${before}`;
+  // focus it the way Tab would, so :focus-visible matches
+  await ev(`[...document.querySelectorAll('#room .obj')].at(-2).focus()`);
+  await key('Tab', 9);
+  await sleep(1500);
+  const r = await ev(`(() => { const w = ${SCENE}.world; w.renderNow(); return { x: w.project(w.anchorOf('mailbox')).x, focused: document.activeElement?.dataset.object }; })()`);
+  if (r.focused !== 'mailbox') return `focus on ${r.focused}`;
+  return r.x > 0 && r.x < W ? '' : `door at x ${r.x} of ${W}`;
+});
+
 // ---------- the 3D world on its own test page ----------
 await scenario('world: renders a non-blank frame', async () => {
   await open({ path: WORLD });
@@ -505,20 +547,20 @@ await scenario('world: renders a non-blank frame', async () => {
   return n > 40 ? '' : `only ${n} colours`;
 });
 
-await scenario('world: every object is visible and pickable at its anchor', async () => {
+await scenario('world: every object is visible and pickable at its anchor in the overview', async () => {
   for (const o of [{ w: 1280, h: 720 }, { w: 375, h: 812, mobile: true }]) {
     await open({ path: WORLD, ...o });
-    const bad = await ev(`(async () => { ${CLIENT} const { OBJECTS } = await import('/assets/game/objects.js'); const w = window.__world;
+    const bad = await ev(`(async () => { ${CLIENT} const { OBJECTS } = await import('/assets/game/objects.js'); const w = window.__world; w.setZoom(2); w.renderNow();
       return OBJECTS.map((ob) => { const [x, y] = client(w, w.project(w.anchorOf(ob.id))); const hit = w.pickObject(x, y); return hit === ob.id ? '' : ob.id + '->' + hit; }).filter(Boolean); })()`);
     if (!Array.isArray(bad) || bad.length) return `${o.w}px: ${JSON.stringify(bad)}`;
   }
   return '';
 });
 
-await scenario('world: the whole room is inside the frame', async () => {
+await scenario('world: the whole room is inside the frame in the overview', async () => {
   for (const o of [{ w: 1280, h: 720 }, { w: 375, h: 812, mobile: true }]) {
     await open({ path: WORLD, ...o });
-    const out = await ev(`(() => { const w = window.__world, { renderW: W, renderH: H } = w.frame, out = [];
+    const out = await ev(`(() => { const w = window.__world, { renderW: W, renderH: H } = w.frame, out = []; w.setZoom(2); w.renderNow();
       for (const x of [0, 240]) for (const y of [0, 72]) for (const z of [0, 112]) { const p = w.project({ x, y, z }); if (p.x < -2 || p.y < -2 || p.x > W + 2 || p.y > H + 2) out.push([x, y, z, Math.round(p.x), Math.round(p.y)]); }
       return out; })()`);
     if (out.length) return `${o.w}px corners outside: ${JSON.stringify(out)}`;

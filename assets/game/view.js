@@ -8,13 +8,21 @@ export const WALL_H = 72;
 export const ROOM_W = 240;
 export const ROOM_D = 112;
 
-export const DEFAULT_YAW = 18; // degrees; turned toward the left wall so its slats read
-export const PITCH = 50;       // degrees looking down
-export const FOV = 35;         // vertical field of view, degrees
+// Two camera poses, blended by zoom: an eye-level RPG camera that follows Tim (zoom 1) and the
+// whole-room overview (ZOOM_MAX), reached by scrolling out on desktop.
+export const DEFAULT_YAW = 18; // overview, degrees; turned toward the left wall so its slats read
+export const PITCH = 50;       // overview, degrees looking down
+export const FOV = 35;         // overview vertical field of view, degrees
+export const FOLLOW_YAW = 10;
+export const FOLLOW_PITCH = 30;
+export const FOLLOW_FOV = 40;
+export const FOLLOW_DIST = 160;
+export const FOLLOW_Y = 24;    // height of the point the follow camera looks at
+export const FOLLOW_LEAD = 16; // the camera looks this far behind Tim (toward the back wall)
 export const SWING_MIN = -10;  // degrees; any further and the camera nears the left wall's plane
 export const SWING_MAX = 30;
-export const ZOOM_MIN = 1;     // the fitted frame; closer would crop the room
-export const ZOOM_MAX = 1.15;  // a little farther out
+export const ZOOM_MIN = 1;     // eye level, following Tim
+export const ZOOM_MAX = 2;     // the whole room
 
 const RAD = Math.PI / 180;
 const TARGET = { x: ROOM_W / 2, y: 20, z: ROOM_D / 2 };
@@ -47,14 +55,15 @@ export function clampSwing(offsetDeg) {
   return Math.min(SWING_MAX, Math.max(SWING_MIN, offsetDeg));
 }
 
-function place(yawDeg, d) {
-  const yaw = yawDeg * RAD, p = PITCH * RAD;
+function orbit(target, yawDeg, pitchDeg, d) {
+  const yaw = yawDeg * RAD, p = pitchDeg * RAD;
   return {
-    x: TARGET.x + d * Math.sin(yaw) * Math.cos(p),
-    y: TARGET.y + d * Math.sin(p),
-    z: TARGET.z + d * Math.cos(yaw) * Math.cos(p),
+    x: target.x + d * Math.sin(yaw) * Math.cos(p),
+    y: target.y + d * Math.sin(p),
+    z: target.z + d * Math.cos(yaw) * Math.cos(p),
   };
 }
+const place = (yawDeg, d) => orbit(TARGET, yawDeg, PITCH, d);
 
 const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
 const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
@@ -68,7 +77,7 @@ export function projectNdc(pose, aspect, point) {
   const d = sub(point, pose.position);
   const t = Math.tan((pose.fov * RAD) / 2);
   const depth = dot(d, f);
-  return { x: dot(d, r) / (depth * t * aspect), y: dot(d, u) / (depth * t) };
+  return { x: dot(d, r) / (depth * t * aspect), y: dot(d, u) / (depth * t), depth };
 }
 
 const fitCache = new Map();
@@ -86,10 +95,76 @@ function fitDistance(aspect) {
   return hi;
 }
 
-// The camera for a swing offset (clamped). Distance is fitted at the default yaw, so swinging never zooms.
-export function cameraPose(yawOffset, aspect, zoom = 1) {
-  const d = fitDistance(aspect) * zoom;
-  return { position: place(DEFAULT_YAW + clampSwing(yawOffset), d), target: { ...TARGET }, fov: FOV };
+function overviewPose(yawOffset, aspect) {
+  return { position: place(DEFAULT_YAW + clampSwing(yawOffset), fitDistance(aspect)), target: { ...TARGET }, fov: FOV };
+}
+
+function followPose(focus, yawOffset) {
+  const target = { x: focus.x, y: FOLLOW_Y, z: focus.z };
+  return { position: orbit(target, FOLLOW_YAW + clampSwing(yawOffset), FOLLOW_PITCH, FOLLOW_DIST), target, fov: FOLLOW_FOV };
+}
+
+// A point is off screen when it is behind the camera, above/below the frame, or past `side` (-1 left, +1 right).
+const offFrame = (pose, aspect, p, side) => {
+  const n = projectNdc(pose, aspect, p);
+  return n.depth <= 0 || Math.abs(n.y) > 1 || side * n.x >= 1;
+};
+// The largest (dir +1) or smallest (dir -1) value in [lo, hi] for which ok holds, ok being monotone.
+function edge(ok, lo, hi, dir) {
+  if (dir < 0) [lo, hi] = [hi, lo];
+  if (!ok(lo)) return null;
+  for (let i = 0; i < 30; i++) { const mid = (lo + hi) / 2; if (ok(mid)) lo = mid; else hi = mid; }
+  return lo;
+}
+const H_SAMPLES = [0, WALL_H / 2, WALL_H];
+
+export const APRON = 48;       // floor past the open front, so the eye-level camera never shows the void below it
+const FOCUS_Z_MIN = 24;        // near the back wall the camera stops, keeping the wall's top in frame
+const FOCUS_Z_MAX = ROOM_D - FOLLOW_LEAD;
+
+const xCache = new Map();
+// How far the follow camera (at no swing, looking at depth z) may slide sideways before the frame
+// shows past the open front edge of either side wall.
+function xBounds(aspect, z) {
+  const key = `${aspect.toFixed(4)}:${z}`;
+  if (xCache.has(key)) return xCache.get(key);
+  const pose = (x) => followPose({ x, z }, 0);
+  const xMax = edge((x) => H_SAMPLES.every((y) => offFrame(pose(x), aspect, { x: ROOM_W, y, z: ROOM_D }, 1)), 0, ROOM_W, 1);
+  const xMin = edge((x) => H_SAMPLES.every((y) => offFrame(pose(x), aspect, { x: 0, y, z: ROOM_D }, -1)), 0, ROOM_W, -1);
+  const b = xMax === null || xMin === null || xMin > xMax ? [ROOM_W / 2, ROOM_W / 2] : [xMin, xMax];
+  xCache.set(key, b);
+  return b;
+}
+
+// Where the follow camera looks for Tim (or any floor point) at (x, z): a little behind him, kept inside the room.
+export function followFocus(point, aspect) {
+  const z = Math.round(Math.min(FOCUS_Z_MAX, Math.max(FOCUS_Z_MIN, point.z - FOLLOW_LEAD)));
+  const [x0, x1] = xBounds(aspect, z);
+  return { x: Math.min(x1, Math.max(x0, point.x)), z };
+}
+
+const lerp = (a, b, t) => a + (b - a) * t;
+const lerp3 = (a, b, t) => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), z: lerp(a.z, b.z, t) });
+// 0 at eye level, 1 at the overview, eased so the swoop starts and lands gently.
+export function zoomBlend(zoom) {
+  const t = (clampZoom(zoom) - ZOOM_MIN) / (ZOOM_MAX - ZOOM_MIN);
+  return t * t * (3 - 2 * t);
+}
+
+// The camera's yaw (degrees) at a swing and zoom; walking sprites face relative to this.
+export function cameraYaw(yawOffset, zoom = ZOOM_MIN) {
+  return lerp(FOLLOW_YAW, DEFAULT_YAW, zoomBlend(zoom)) + clampSwing(yawOffset);
+}
+
+// The camera for a swing offset (clamped), a zoom, and the follow focus (already clamped by followFocus;
+// defaults to the middle of the room). Zoom 1 is eye level, ZOOM_MAX the fitted whole-room overview.
+export function cameraPose(yawOffset, aspect, zoom = ZOOM_MIN, focus = null) {
+  const t = zoomBlend(zoom);
+  const near = followPose(focus ?? followFocus({ x: ROOM_W / 2, z: ROOM_D / 2 }, aspect), yawOffset);
+  if (t === 0) return near;
+  const far = overviewPose(yawOffset, aspect);
+  if (t === 1) return far;
+  return { position: lerp3(near.position, far.position, t), target: lerp3(near.target, far.target, t), fov: lerp(near.fov, far.fov, t) };
 }
 
 // Which way a walk of (dx, dz) reads on screen for a camera at yawDeg: 'down' comes toward the camera.

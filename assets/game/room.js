@@ -351,9 +351,10 @@ function buildOverlay(room, world) {
     const off = () => { shown = null; hide(); world.highlight(null); };
     b.addEventListener('pointerenter', (e) => show(pointed(e)));
     b.addEventListener('pointermove', (e) => show(pointed(e)));
-    b.addEventListener('focus', () => show(o));
+    // keyboard focus brings an off-screen prop into view; the camera goes back to Tim on blur
+    b.addEventListener('focus', () => { if (b.matches(':focus-visible')) world.peek(world.anchorOf(o.id)); show(o); });
     b.addEventListener('pointerleave', off);
-    b.addEventListener('blur', off);
+    b.addEventListener('blur', () => { world.peek(null); off(); });
     room.append(b);
     return b;
   });
@@ -576,7 +577,7 @@ function setupPager(room, scene) {
   return pager;
 }
 
-// ---------- camera swing (desktop): right-drag or a sideways trackpad swipe; wheel zooms a little ----------
+// ---------- camera swing (desktop): right-drag or a sideways trackpad swipe; wheel scrolls out to the whole room ----------
 // Never on phones (one finger always means walk/tap) and never while a panel is open.
 // Four seconds after the last nudge the view eases back to the default (or snaps, under reduced motion).
 const SWING_PER_PX = 0.25;
@@ -605,7 +606,7 @@ function setupSwing(room, scene) {
     if (!allowed()) return;
     e.preventDefault();
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) world.setSwing(world.swing() - e.deltaX * 0.1);
-    else world.setZoom(world.zoom() * (1 + e.deltaY * 0.001));
+    else world.setZoom(world.zoom() + e.deltaY * 0.0025);
     nudged();
   }, { passive: false });
   function scheduleReturn() {
@@ -618,7 +619,7 @@ function setupSwing(room, scene) {
       const s = world.swing(), z = world.zoom();
       const d = Math.min(Math.abs(s), 60 / 30); // ~60°/s at 30 fps
       world.setSwing(Math.abs(s) <= d ? 0 : s - Math.sign(s) * d);
-      world.setZoom(Math.abs(z - 1) <= 0.01 ? 1 : z - Math.sign(z - 1) * 0.01);
+      world.setZoom(Math.abs(z - 1) <= 0.03 ? 1 : z - Math.sign(z - 1) * 0.03);
       easing = requestAnimationFrame(step);
     };
     easing = requestAnimationFrame(step);

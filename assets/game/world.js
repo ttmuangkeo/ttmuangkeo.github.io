@@ -1,9 +1,10 @@
-// The 3D office: renderer, tilted camera, lights, the room shell and the props.
+// The 3D office: renderer, an eye-level camera that follows Tim (scroll out for the whole room),
+// lights, the room shell and the props.
 // Renders at a low resolution and lets CSS scale it up crisp. Everything the HTML overlays
 // need (projection, picking, prop rectangles) is in render pixels, origin top-left.
 // createWorld throws when WebGL is unavailable; the caller falls back to the static page.
 import * as THREE from 'three';
-import { cameraPose, clampSwing, clampZoom, worldToCell, ROOM_W, ROOM_D, WALL_H } from './view.js';
+import { cameraPose, cameraYaw, followFocus, zoomBlend, clampSwing, clampZoom, worldToCell, ROOM_W, ROOM_D, WALL_H, APRON } from './view.js';
 import { ROOM, OBJECTS } from './objects.js';
 import { spriteTexture, refreshTextures } from './textures.js';
 import { buildProps } from './props.js';
@@ -11,6 +12,7 @@ import { buildProps } from './props.js';
 const OBJECT_IDS = new Set(OBJECTS.map((o) => o.id));
 const FRAME_MS = 33;           // at most ~30 fps
 const SUN_K = 0.6, AMB_K = 0.8, LAMP_K = 90;
+const FOLLOW_MS = 180;         // time constant of the camera easing after Tim (or a peeked prop)
 
 function shell() {
   const g = new THREE.Group();
@@ -23,8 +25,24 @@ function shell() {
   const left = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D, WALL_H), mat('wall_left'));
   left.rotation.y = Math.PI / 2;
   left.position.set(0, WALL_H / 2, ROOM_D / 2);
-  for (const m of [floor, back, left]) { m.receiveShadow = true; m.userData.key = 'shell'; }
-  g.add(floor, back, left);
+  // Eye level only: a strip of floor past the open front, and a right wall closing the room.
+  // The overview leaves both off, so it reads as the open cutaway it was.
+  // (it runs past both side walls too, so the corners beyond their front edges are floor, not void)
+  const apronW = ROOM_W + 2 * APRON;
+  const apronGeo = new THREE.PlaneGeometry(apronW, APRON);
+  const uv = apronGeo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) { // the floor texture's front strip, unstretched
+    uv.setXY(i, (uv.getX(i) * apronW - APRON) / ROOM_W, uv.getY(i) * (APRON / ROOM_D));
+  }
+  const apron = new THREE.Mesh(apronGeo, mat('floor'));
+  apron.rotation.x = -Math.PI / 2;
+  apron.position.set(ROOM_W / 2, 0, ROOM_D + APRON / 2);
+  const right = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D, WALL_H), mat('wall_left'));
+  right.rotation.y = -Math.PI / 2;
+  right.position.set(ROOM_W, WALL_H / 2, ROOM_D / 2);
+  for (const m of [floor, back, left, right, apron]) { m.receiveShadow = true; m.userData.key = 'shell'; }
+  g.add(floor, back, left, right, apron);
+  g.userData.eyeLevel = [right, apron];
   return g;
 }
 
@@ -57,12 +75,30 @@ export function createWorld(container, frame) {
     l.position.set(x + 4.5, WALL_H - 14, 16);
     return l;
   });
-  scene.add(hemi, sun, sun.target, tint, ...lamps, shell());
+  const room = shell();
+  scene.add(hemi, sun, sun.target, tint, ...lamps, room);
 
   const { group: props, entries } = buildProps();
   scene.add(props);
 
   let swing = 0, zoom = 1, dirty = true, last = 0, raf = 0, lost = false, mark = null;
+  // The follow camera eases its focus toward the goal: a peeked prop if any, else Tim.
+  let focus = null, subject = null, peeked = null, eased = 0;
+  const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const goal = () => followFocus(peeked ?? subject ?? { x: ROOM_W / 2, z: ROOM_D / 2 }, camera.aspect);
+  // Moves the focus toward the goal for the time since the last step; true once it has arrived.
+  const ease = (now) => {
+    const g = goal();
+    const dt = Math.min(100, now - (eased || now));
+    eased = now;
+    if (!focus || still()) focus = g;
+    else {
+      const k = 1 - Math.exp(-dt / FOLLOW_MS);
+      focus = { x: focus.x + (g.x - focus.x) * k, z: focus.z + (g.z - focus.z) * k };
+      if (Math.hypot(g.x - focus.x, g.z - focus.z) < 0.05) focus = g;
+    }
+    return focus === g;
+  };
   const renderCbs = [];
   const ray = new THREE.Raycaster();
   const v = new THREE.Vector3();
@@ -79,9 +115,11 @@ export function createWorld(container, frame) {
       world.updateCamera();
     },
     updateCamera() {
-      const p = cameraPose(swing, camera.aspect, zoom);
+      focus ??= goal();
+      const p = cameraPose(swing, camera.aspect, zoom, focus);
       camera.position.set(p.position.x, p.position.y, p.position.z);
       camera.fov = p.fov;
+      for (const m of room.userData.eyeLevel) m.visible = zoomBlend(zoom) < 0.5;
       camera.lookAt(p.target.x, p.target.y, p.target.z);
       camera.updateProjectionMatrix();
       camera.updateMatrixWorld();
@@ -91,6 +129,16 @@ export function createWorld(container, frame) {
     swing: () => swing,
     setZoom(z) { zoom = clampZoom(z); world.updateCamera(); },
     zoom: () => zoom,
+    yaw: () => cameraYaw(swing, zoom),
+    // Tim's floor position; the camera eases after it (the first call snaps there).
+    follow(x, z) {
+      const first = !subject;
+      subject = { x, z };
+      if (first) { focus = goal(); world.updateCamera(); } else world.invalidate();
+    },
+    // Look at a floor point instead of Tim (keyboard focus on an off-screen prop); null looks back.
+    peek(p) { peeked = p ? { x: p.x, z: p.z } : null; world.invalidate(); },
+    focus: () => focus && { ...focus },
 
     setFrame(key, i) { const e = entries.get(key); if (e?.setFrame) { e.setFrame(i); world.invalidate(); } },
     setSky(key, i) { entries.get('window').setSky(key, i); world.invalidate(); },
@@ -186,10 +234,17 @@ export function createWorld(container, frame) {
     onRender(cb) { renderCbs.push(cb); },
     renderNow() {
       if (lost) return;
+      const now = performance.now();
+      const settled = ease(now);
+      const p = cameraPose(swing, camera.aspect, zoom, focus);
+      camera.position.set(p.position.x, p.position.y, p.position.z);
+      camera.lookAt(p.target.x, p.target.y, p.target.z);
+      camera.updateMatrixWorld();
       renderer.render(scene, camera);
       dirty = false;
-      last = performance.now();
+      last = now;
       for (const cb of renderCbs) cb();
+      if (!settled) world.invalidate(); else eased = 0;
     },
     invalidate() {
       dirty = true;
@@ -198,7 +253,7 @@ export function createWorld(container, frame) {
         raf = 0;
         if (!dirty || lost) return; // while the context is lost, the restore handler renders
         if (now - last >= FRAME_MS) world.renderNow();
-        if (dirty) raf = requestAnimationFrame(tick);
+        if (dirty && !raf) raf = requestAnimationFrame(tick);
       };
       raf = requestAnimationFrame(tick);
     },
