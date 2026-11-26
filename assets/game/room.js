@@ -5,7 +5,7 @@ import { OBJECTS, ROOM, WINDOW_SPOT } from './objects.js';
 import { nextWalkId } from './grid.js';
 import { PANELS } from './panels.js';
 import { createFoundState } from './state.js';
-import { KEY_DIRS, KONAMI, nextCell, objectInReach, createSequence } from './controls.js';
+import { KEY_DIRS, KONAMI, PAD_KEYS, nextCell, objectInReach, createSequence, padDir } from './controls.js';
 import { skyNow, lightFor } from './sky.js';
 import { frameFor, quadTransform } from './view.js';
 import { createWorld } from './world.js';
@@ -469,16 +469,18 @@ function createWindow(room, scene) {
   return sky;
 }
 
-// ---------- keyboard play: arrows/WASD walk, E uses whatever Tim is next to ----------
+// ---------- step-by-step play: arrows/WASD or the phone D-pad walk, E or A uses what Tim is next to ----------
+// Both inputs share one walker, so holding a direction walks cell by cell either way.
 function setupKeyboard(scene) {
   const { tim } = scene;
   const held = []; // directions in press order; the latest one wins
   let stepping = false;
   const konami = createSequence(KONAMI);
+  const useKey = () => (matchMedia(PHONE_QUERY).matches ? 'A' : 'E');
   const reachable = () => objectInReach(tim.cell(), OBJECTS);
   const hint = () => {
     const o = reachable();
-    if (o) scene.tipFor(o, `E · ${o.label}`); else scene.hideTip();
+    if (o) scene.tipFor(o, `${useKey()} · ${o.label}`); else scene.hideTip();
   };
   const run = async () => {
     if (stepping) return;
@@ -497,35 +499,112 @@ function setupKeyboard(scene) {
       if (!tim.walking && !facingWall) tim.show('tim_idle_down');
     }
   };
+  const press = (dir) => {
+    if (!held.includes(dir)) held.push(dir);
+    run();
+  };
+  const release = (dir) => {
+    const i = held.indexOf(dir);
+    if (i >= 0) held.splice(i, 1);
+  };
+  // Uses whatever Tim is next to; returns false (with a nudge over his head) when nothing is.
+  const use = () => {
+    const o = reachable();
+    if (o) {
+      scene.hideTip();
+      scene.activate(o.id, scene.buttons.find((b) => b.dataset.object === o.id));
+      return true;
+    }
+    const h = scene.world.project(tim.headPoint());
+    scene.tipAt(h.x, h.y, 'Walk up to something first');
+    setTimeout(scene.hideTip, 1400);
+    return false;
+  };
+  const secret = (key) => { if (konami(key)) scene.sky.aurora(); };
   addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey || scene.panels.isOpen()) return;
     if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
-    if (!e.repeat && konami(e.key)) scene.sky.aurora();
+    if (!e.repeat) secret(e.key);
     const dir = KEY_DIRS[e.key];
     if (dir) {
       e.preventDefault(); // arrows would scroll the page
-      if (!held.includes(dir)) held.push(dir);
-      run();
+      press(dir);
       return;
     }
-    if ((e.key === 'e' || e.key === 'E') && !e.repeat) {
-      const o = reachable();
-      if (o) {
-        e.preventDefault();
-        scene.hideTip();
-        scene.activate(o.id, scene.buttons.find((b) => b.dataset.object === o.id));
-      } else {
-        const h = scene.world.project(tim.headPoint());
-        scene.tipAt(h.x, h.y, 'Walk up to something first');
-        setTimeout(scene.hideTip, 1400);
-      }
-    }
+    if ((e.key === 'e' || e.key === 'E') && !e.repeat && use()) e.preventDefault();
   });
-  addEventListener('keyup', (e) => {
-    const i = held.indexOf(KEY_DIRS[e.key]);
-    if (i >= 0) held.splice(i, 1);
-  });
+  addEventListener('keyup', (e) => release(KEY_DIRS[e.key]));
   addEventListener('blur', () => { held.length = 0; });
+  return { press, release, releaseAll: () => { held.length = 0; }, use, secret };
+}
+
+// ---------- phones: a handheld-style D-pad and A/B buttons under the room ----------
+// The D-pad is one surface: the thumb can slide from one arm to another without lifting.
+// A uses what Tim is next to, B makes him wave; both, with the pad, also enter the Konami code.
+// Pointer-only (aria-hidden): the object tray below does the same job for screen readers.
+function buildPad(scene, mover) {
+  const pad = doc.createElement('div');
+  pad.className = 'pad';
+  pad.setAttribute('aria-hidden', 'true');
+  pad.innerHTML = `
+    <div class="pad-dpad">
+      <span class="pad-arm pad-arm--up" data-dir="up"></span>
+      <span class="pad-arm pad-arm--right" data-dir="right"></span>
+      <span class="pad-arm pad-arm--down" data-dir="down"></span>
+      <span class="pad-arm pad-arm--left" data-dir="left"></span>
+      <span class="pad-hub"></span>
+    </div>
+    <p class="pad-hint"><b>A</b> look<br><b>B</b> wave</p>
+    <div class="pad-ab">
+      <button type="button" class="pad-btn pad-btn--b" tabindex="-1" data-btn="b">B</button>
+      <button type="button" class="pad-btn pad-btn--a" tabindex="-1" data-btn="a">A</button>
+    </div>`;
+  const dpad = pad.querySelector('.pad-dpad');
+  const buzz = () => { try { navigator.vibrate?.(8); } catch { /* not allowed */ } };
+  let pointer = null, dir = null;
+  const point = (next) => {
+    if (next === dir) return;
+    if (dir) mover.release(dir);
+    dir = next;
+    dpad.dataset.dir = dir ?? '';
+    if (dir) { buzz(); mover.secret(PAD_KEYS[dir]); mover.press(dir); }
+  };
+  const aim = (e) => {
+    const r = dpad.getBoundingClientRect();
+    point(padDir(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2), r.width * 0.08));
+  };
+  dpad.addEventListener('pointerdown', (e) => {
+    if (pointer !== null || scene.panels.isOpen()) return;
+    e.preventDefault(); // no text selection, callout or double-tap zoom
+    pointer = e.pointerId;
+    dpad.setPointerCapture?.(e.pointerId);
+    aim(e);
+  });
+  dpad.addEventListener('pointermove', (e) => { if (e.pointerId === pointer) aim(e); });
+  const lift = (e) => { if (e.pointerId !== pointer) return; pointer = null; point(null); };
+  dpad.addEventListener('pointerup', lift);
+  dpad.addEventListener('pointercancel', lift);
+  dpad.addEventListener('lostpointercapture', lift);
+  addEventListener('blur', () => { pointer = null; point(null); mover.releaseAll(); });
+
+  for (const b of pad.querySelectorAll('.pad-btn')) {
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (scene.panels.isOpen()) return;
+      buzz();
+      b.classList.add('is-down');
+      mover.secret(b.dataset.btn);
+      if (b.dataset.btn === 'a') mover.use(); else scene.tim.wave();
+    });
+    const up = () => b.classList.remove('is-down');
+    b.addEventListener('pointerup', up);
+    b.addEventListener('pointercancel', up);
+    b.addEventListener('pointerleave', up);
+    b.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+  pad.addEventListener('contextmenu', (e) => e.preventDefault()); // long-press menus on the pad
+  doc.getElementById('stage').after(pad);
+  return pad;
 }
 
 // ---------- the pager goes off once per visit and invites a triage run ----------
@@ -690,7 +769,8 @@ export function init() {
         callout('<p><strong>Run the migration.</strong> Move a mailbox from EWS to Microsoft Graph without the user noticing.</p>', '▶ Run the cutover', 'rack', rackBtn),
       );
     };
-    setupKeyboard(scene);
+    scene.mover = setupKeyboard(scene);
+    buildPad(scene, scene.mover);
     setupSwing(room, scene);
     // Emotes: alert when the pager goes off, a heart when everything is found (both also under
     // reduced motion, as still images); the rest are idle chatter in the idle loop below.
@@ -757,7 +837,7 @@ export function init() {
 
     // Welcome: Tim waves and says hi; the bubble goes away on the first interaction.
     const helloText = matchMedia(PHONE_QUERY).matches
-      ? "Hey, I'm Tim — just a kid from Alaska. Tap around."
+      ? "Hey, I'm Tim — just a kid from Alaska. Walk me around with the D-pad and press A to look at things."
       : "Hey, I'm Tim — just a kid from Alaska. Walk with the arrow keys or WASD and press E to look at things, or just click around.";
     // On phones the room is small, so the greeting hangs under Tim instead of over the desk.
     const phone = matchMedia(PHONE_QUERY).matches;

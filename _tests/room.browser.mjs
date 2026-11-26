@@ -175,6 +175,77 @@ await scenario('the Konami code brings up the northern lights', async () => {
   return sky === 'aurora' ? '' : `sky is ${sky}`;
 });
 
+// A thumb on the phone controls, as pointer events (CDP touch input hangs headless Chrome after a long run;
+// the pad only listens to pointer events, which touches and mice both send).
+let thumb = [0, 0];
+const touch = (type, x = thumb[0], y = thumb[1]) => { thumb = [x, y];
+  const t = { touchStart: 'mousePressed', touchMove: 'mouseMoved', touchEnd: 'mouseReleased' }[type];
+  return send('Input.dispatchMouseEvent', { type: t, x, y, button: 'left', buttons: type === 'touchEnd' ? 0 : 1, clickCount: 1 }); };
+const centreOf = (sel) => ev(`(() => { const r = document.querySelector('${sel}').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+const tapAt = async (sel) => { const [x, y] = await centreOf(sel); await touch('touchStart', x, y); await sleep(60); await touch('touchEnd'); await sleep(80); };
+const openPhone = async () => {
+  await open({ w: 375, h: 812, mobile: true, before: `try { sessionStorage.setItem('tim-room-paged', '1'); } catch {}` });
+  await ev(`window.scrollTo(0, document.querySelector('.pad').getBoundingClientRect().bottom - innerHeight + scrollY + 10)`);
+};
+const timCell = () => ev(`document.getElementById('room').scene.tim.cell()`);
+
+await scenario('the D-pad shows on phones only', async () => {
+  await open();
+  const desk = await ev(`getComputedStyle(document.querySelector('.pad')).display`);
+  await openPhone();
+  const r = await ev(`(() => { const p = document.querySelector('.pad').getBoundingClientRect(); const room = document.getElementById('room').getBoundingClientRect(); const a = document.querySelector('.pad-btn--a').getBoundingClientRect(); return { shown: p.height > 100, under: p.top >= room.bottom - 1, aSize: Math.round(a.width), scroll: document.documentElement.scrollWidth > innerWidth }; })()`);
+  return desk === 'none' && r.shown && r.under && r.aSize >= 44 && !r.scroll ? '' : JSON.stringify({ desk, ...r });
+});
+
+await scenario('on phones holding the D-pad walks Tim and A uses what he is next to', async () => {
+  await openPhone();
+  const c0 = await timCell();
+  const [x, y] = await centreOf('.pad-arm--up');
+  await touch('touchStart', x, y);
+  await sleep(1400); // from the rug straight up to the wall, under the trail map
+  const lit = await ev(`document.querySelector('.pad-dpad').dataset.dir`);
+  await touch('touchEnd'); await sleep(300);
+  const c1 = await timCell();
+  if (lit !== 'up') return `pad lit ${lit}`;
+  if (!(c1.row === 0 && c1.col === c0.col)) return `Tim went ${JSON.stringify(c0)} -> ${JSON.stringify(c1)}`;
+  const tip = await ev(`document.querySelector('#room .tip').hidden ? '' : document.querySelector('#room .tip').textContent`);
+  if (tip !== 'A · Trail map') return `reach hint was ${JSON.stringify(tip)}`;
+  await tapAt('.pad-btn--a'); await sleep(2200);
+  const p = await panel();
+  return p.open && p.obj === 'map' ? '' : `panel ${JSON.stringify(p)}`;
+});
+
+await scenario('sliding a thumb across the D-pad turns Tim, lifting it stops him', async () => {
+  await openPhone();
+  const c0 = await timCell();
+  const [ux, uy] = await centreOf('.pad-arm--up');
+  const [rx, ry] = await centreOf('.pad-arm--right');
+  await touch('touchStart', ux, uy); await sleep(350);
+  await touch('touchMove', (ux + rx) / 2 + 10, (uy + ry) / 2); await touch('touchMove', rx, ry);
+  await sleep(500);
+  const lit = await ev(`document.querySelector('.pad-dpad').dataset.dir`);
+  await touch('touchEnd'); await sleep(350);
+  const c1 = await timCell();
+  await sleep(500);
+  const c2 = await timCell();
+  if (lit !== 'right') return `pad lit ${lit}`;
+  if (!(c1.row < c0.row && c1.col > c0.col)) return `Tim went ${JSON.stringify(c0)} -> ${JSON.stringify(c1)}`;
+  return c2.col === c1.col && c2.row === c1.row ? '' : `kept walking after lift: ${JSON.stringify(c1)} -> ${JSON.stringify(c2)}`;
+});
+
+await scenario('A away from everything nudges, B waves, and the pad speaks the Konami code', async () => {
+  await openPhone();
+  await tapAt('.pad-btn--a');
+  const nudge = await ev(`document.querySelector('#room .tip').textContent`);
+  if ((await panel()).open) return 'A opened a panel from the middle of the rug';
+  await tapAt('.pad-btn--b'); await sleep(250);
+  const waving = await ev(`document.getElementById('room').scene.tim.pose`);
+  for (const d of ['up', 'up', 'down', 'down', 'left', 'right', 'left', 'right']) { await tapAt(`.pad-arm--${d}`); await sleep(250); }
+  await tapAt('.pad-btn--b'); await tapAt('.pad-btn--a');
+  const sky = await ev(`document.getElementById('room').dataset.sky`);
+  return nudge === 'Walk up to something first' && waving === 'tim_wave' && sky === 'aurora' ? '' : JSON.stringify({ nudge, waving, sky });
+});
+
 await scenario('the pager panel runs a triage ticket to a verdict, then Get in touch works', async () => {
   await reduceMotion(true);
   try {

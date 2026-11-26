@@ -232,7 +232,7 @@ test('allFound only after every object, and ignores unknown ids', () => {
 });
 
 // ---------- keyboard play, the window sky, and the pager mini-game ----------
-import { KEY_DIRS, KONAMI, nextCell, objectInReach, createSequence } from '../assets/game/controls.js';
+import { KEY_DIRS, KONAMI, PAD_KEYS, nextCell, objectInReach, createSequence, padDir } from '../assets/game/controls.js';
 import { skyPhase, isRaining, skyNow } from '../assets/game/sky.js';
 import { TICKETS, VERDICTS, verdictFor, createIncidentPanel } from '../assets/game/incident.js';
 import { SKY_PHASES } from '../assets/game/sprites.js';
@@ -250,6 +250,22 @@ test('objectInReach finds the object Tim is standing at or next to', () => {
   assert.equal(objectInReach(ROOM.start, OBJECTS), null);
   const pager = OBJECTS.find((o) => o.id === 'pager').useSpot;
   assert.equal(objectInReach({ col: pager.col + 1, row: pager.row }, OBJECTS)?.id, 'pager');
+});
+
+test('padDir reads a thumb on the D-pad as one of four directions', () => {
+  assert.equal(padDir(0, -30), 'up');
+  assert.equal(padDir(0, 30), 'down');
+  assert.equal(padDir(-30, 5), 'left');
+  assert.equal(padDir(30, -5), 'right');
+  assert.equal(padDir(20, -25), 'up');    // mostly up wins over a little right
+  assert.equal(padDir(3, -4), null);      // inside the dead zone at the centre
+  assert.equal(padDir(3, -4, 2), 'up');   // a smaller dead zone
+});
+
+test('the D-pad and A/B buttons speak the Konami code', () => {
+  const seq = createSequence(KONAMI);
+  const pad = ['up', 'up', 'down', 'down', 'left', 'right', 'left', 'right'].map((d) => PAD_KEYS[d]);
+  assert.equal([...pad, 'b', 'a'].map(seq).at(-1), true);
 });
 
 test('createSequence fires on the Konami code and recovers from mistakes', () => {
