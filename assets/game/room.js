@@ -343,10 +343,15 @@ function buildOverlay(room, world) {
     b.className = 'obj';
     b.dataset.object = o.id;
     b.setAttribute('aria-label', o.ariaLabel);
-    const show = () => { tipFor(o); world.highlight(o.id); };
-    const off = () => { hide(); world.highlight(null); };
-    b.addEventListener('pointerenter', show);
-    b.addEventListener('focus', show);
+    // A button covers its prop's whole on-screen box (plus touch padding), which can overlap a
+    // neighbour; under the pointer, the prop actually hit wins (keyboard focus uses the button's own).
+    const pointed = (e) => OBJECTS.find((x) => x.id === world.pickObject(e.clientX, e.clientY)) ?? o;
+    let shown = null;
+    const show = (target) => { if (shown === target) return; shown = target; tipFor(target); world.highlight(target.id); };
+    const off = () => { shown = null; hide(); world.highlight(null); };
+    b.addEventListener('pointerenter', (e) => show(pointed(e)));
+    b.addEventListener('pointermove', (e) => show(pointed(e)));
+    b.addEventListener('focus', () => show(o));
     b.addEventListener('pointerleave', off);
     b.addEventListener('blur', off);
     room.append(b);
@@ -607,12 +612,13 @@ function setupSwing(room, scene) {
     if (easing) return;
     const step = (now) => {
       easing = 0;
-      if (drag || world.swing() === 0) return;
+      if (drag || (world.swing() === 0 && world.zoom() === 1)) return;
       if (now - lastInput < SWING_RETURN_MS) { easing = requestAnimationFrame(step); return; }
-      if (reducedMotion()) { world.setSwing(0); return; }
-      const s = world.swing();
+      if (reducedMotion()) { world.setSwing(0); world.setZoom(1); return; }
+      const s = world.swing(), z = world.zoom();
       const d = Math.min(Math.abs(s), 60 / 30); // ~60°/s at 30 fps
       world.setSwing(Math.abs(s) <= d ? 0 : s - Math.sign(s) * d);
+      world.setZoom(Math.abs(z - 1) <= 0.01 ? 1 : z - Math.sign(z - 1) * 0.01);
       easing = requestAnimationFrame(step);
     };
     easing = requestAnimationFrame(step);
@@ -723,8 +729,20 @@ export function init() {
     // Opening or closing any panel cancels a walk in progress, so no stale panel pops up later.
     scene.onPanelChange = () => { tim.walkId = nextWalkId(tim.walkId); };
     for (const b of scene.buttons) {
-      b.addEventListener('click', (e) => { e.stopPropagation(); scene.activate(b.dataset.object, b); });
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // pointer clicks go to the prop under the pointer; keyboard clicks (detail 0) to the button's own object
+        const id = (e.detail && world.pickObject(e.clientX, e.clientY)) || b.dataset.object;
+        scene.activate(id, scene.buttons.find((x) => x.dataset.object === id) ?? b);
+      });
     }
+    // If the GPU drops the WebGL context and it doesn't come back, show the static page again.
+    let lostTimer = 0;
+    world.onContext((state) => {
+      clearTimeout(lostTimer);
+      if (state === 'lost') lostTimer = setTimeout(() => doc.documentElement.classList.remove('game-ready'), 4000);
+      else doc.documentElement.classList.add('game-ready');
+    });
     // HUD "Get in touch" opens the mailbox panel right away (the mailto link stays as the no-JS fallback).
     doc.querySelector('[data-hud="contact"]')?.addEventListener('click', (e) => {
       e.preventDefault();

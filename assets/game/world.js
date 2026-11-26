@@ -3,7 +3,7 @@
 // need (projection, picking, prop rectangles) is in render pixels, origin top-left.
 // createWorld throws when WebGL is unavailable; the caller falls back to the static page.
 import * as THREE from 'three';
-import { cameraPose, clampSwing, worldToCell, ROOM_W, ROOM_D, WALL_H } from './view.js';
+import { cameraPose, clampSwing, clampZoom, worldToCell, ROOM_W, ROOM_D, WALL_H } from './view.js';
 import { ROOM, OBJECTS } from './objects.js';
 import { spriteTexture, refreshTextures } from './textures.js';
 import { buildProps } from './props.js';
@@ -89,7 +89,7 @@ export function createWorld(container, frame) {
     },
     setSwing(deg) { swing = clampSwing(deg); world.updateCamera(); },
     swing: () => swing,
-    setZoom(z) { zoom = Math.min(1.15, Math.max(0.85, z)); world.updateCamera(); },
+    setZoom(z) { zoom = clampZoom(z); world.updateCamera(); },
     zoom: () => zoom,
 
     setFrame(key, i) { const e = entries.get(key); if (e?.setFrame) { e.setFrame(i); world.invalidate(); } },
@@ -196,7 +196,7 @@ export function createWorld(container, frame) {
       if (raf) return;
       const tick = (now) => {
         raf = 0;
-        if (!dirty) return;
+        if (!dirty || lost) return; // while the context is lost, the restore handler renders
         if (now - last >= FRAME_MS) world.renderNow();
         if (dirty) raf = requestAnimationFrame(tick);
       };
@@ -204,8 +204,10 @@ export function createWorld(container, frame) {
     },
   };
 
-  canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); lost = true; });
-  canvas.addEventListener('webglcontextrestored', () => { lost = false; refreshTextures(); world.renderNow(); });
+  const contextCbs = [];
+  world.onContext = (cb) => contextCbs.push(cb);
+  canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); lost = true; for (const cb of contextCbs) cb('lost'); });
+  canvas.addEventListener('webglcontextrestored', () => { lost = false; refreshTextures(); world.renderNow(); for (const cb of contextCbs) cb('restored'); });
 
   world.resize(frame);
   return world;

@@ -503,3 +503,14 @@ test('the 2D room backdrop and native-size scaling are gone', async () => {
   assert.equal(grid.fitScale, undefined);
   assert.equal(grid.NATIVE_W, undefined);
 });
+
+test('the whole room stays in frame across the zoom range', () => {
+  for (const zoom of [1, 1.08, 1.15]) {
+    const pose = V.cameraPose(0, 16 / 9, zoom);
+    for (const x of [0, 240]) for (const y of [0, 72]) for (const z of [0, 112]) {
+      const n = V.projectNdc(pose, 16 / 9, { x, y, z });
+      assert.ok(Math.abs(n.x) <= 1 && Math.abs(n.y) <= 1, `zoom ${zoom}`);
+    }
+  }
+  assert.deepEqual([V.clampZoom(0.5), V.clampZoom(2), V.clampZoom(1.1)], [1, 1.15, 1.1]);
+});

@@ -13,6 +13,8 @@ export const PITCH = 50;       // degrees looking down
 export const FOV = 35;         // vertical field of view, degrees
 export const SWING_MIN = -10;  // degrees; any further and the camera nears the left wall's plane
 export const SWING_MAX = 30;
+export const ZOOM_MIN = 1;     // the fitted frame; closer would crop the room
+export const ZOOM_MAX = 1.15;  // a little farther out
 
 const RAD = Math.PI / 180;
 const TARGET = { x: ROOM_W / 2, y: 20, z: ROOM_D / 2 };
@@ -35,6 +37,10 @@ export function frameFor(vw, vh, hudH, isPhone) {
   const scale = Math.max(1, Math.round(cssW / 480));
   const renderW = Math.floor(cssW / scale);
   return { renderW, renderH: Math.floor((renderW * 9) / 16), scale };
+}
+
+export function clampZoom(z) {
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
 }
 
 export function clampSwing(offsetDeg) {

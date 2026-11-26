@@ -448,6 +448,54 @@ await scenario('the whiteboard numbers dim with the room at night', async () => 
   return m && +m[1] < 0.8 ? '' : `filter ${f}`;
 });
 
+// ---------- final review fixes ----------
+await scenario('a click on each prop opens that prop, on a laptop and a phone', async () => {
+  for (const o of [{ w: 1280, h: 720 }, { w: 375, h: 812, mobile: true }]) {
+    await open(o);
+    const pts = await ev(`(() => { ${CLIENT} const sc = ${SCENE}; window.__acts = []; sc.activate = (id) => { window.__acts.push(id); };
+      document.querySelector('#room .bubble')?.remove();
+      return [...document.querySelectorAll('#room .obj')].map((b) => [b.dataset.object, ...client(sc.world, sc.world.project(sc.world.anchorOf(b.dataset.object)))]); })()`);
+    const bad = [];
+    for (const [id, x, y] of pts) {
+      await ev(`window.__acts = []`);
+      await clickAt(x, y);
+      await sleep(30);
+      const got = await ev(`window.__acts[0] ?? null`);
+      if (got !== id) bad.push(`${id}->${got}`);
+    }
+    if (bad.length) return `${o.w}px: ${bad.join(', ')}`;
+  }
+  return '';
+});
+
+await scenario('a WebGL context that never comes back brings back the static page', async () => {
+  await open();
+  await ev(`(() => { const w = ${SCENE}.world; window.__renders = 0; const r = w.renderNow; w.renderNow = () => { window.__renders++; r(); };
+    const gl = w.canvas.getContext('webgl2') || w.canvas.getContext('webgl'); gl.getExtension('WEBGL_lose_context').loseContext(); w.invalidate(); })()`);
+  await sleep(600);
+  const spins = await ev(`window.__renders`);
+  if (spins > 2) return `render loop kept spinning while lost: ${spins} calls`;
+  await sleep(4500);
+  const r = await ev(`({ ready: document.documentElement.classList.contains('game-ready'), fallback: getComputedStyle(document.querySelector('.fallback')).display !== 'none', errs: window.__errs })`);
+  return !r.ready && r.fallback && !r.errs.length ? '' : JSON.stringify(r);
+});
+
+await scenario('wheel zoom stays in range and eases back with the swing', async () => {
+  await open();
+  const [x, y] = await roomCentre();
+  await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY: -800 });
+  await sleep(100);
+  const z0 = await ev(`${SCENE}.world.zoom()`);
+  if (z0 < 1) return `zoomed in past the fitted frame: ${z0}`;
+  await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY: 400 });
+  await sleep(100);
+  const z1 = await ev(`${SCENE}.world.zoom()`);
+  if (!(z1 > 1)) return `wheel did not zoom out: ${z1}`;
+  await sleep(6000);
+  const z2 = await ev(`${SCENE}.world.zoom()`);
+  return Math.abs(z2 - 1) < 1e-6 ? '' : `zoom after 6 s ${z2}`;
+});
+
 // ---------- the 3D world on its own test page ----------
 await scenario('world: renders a non-blank frame', async () => {
   await open({ path: WORLD });
